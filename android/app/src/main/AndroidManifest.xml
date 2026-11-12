@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The package attribute is required by aapt2 link; it matches the namespace in
+     app/build.gradle, which the Android Gradle Plugin takes as the authoritative value. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.opurom.mobile">
+
+    <application
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

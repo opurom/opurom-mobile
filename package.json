@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "OPUROM R6 mobile native artifacts: arm64 iOS Rust staticlib plus Swift/JNI compile checks.",
+  "description": "OPUROM mobile native artifacts: arm64 iOS Rust staticlib plus arm64/x86_64 Android shared objects and Swift/JNI compile checks.",
   "scripts": {
     "verify": "node verify.mjs",
     "test": "node test/abi.test.mjs"

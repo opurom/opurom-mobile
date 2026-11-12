@@ -8,8 +8,10 @@ package org.opurom.mobile;
  * exactly once; a zero handle, double free, or concurrent use of one handle is undefined. The
  * native method must copy the RGBA frame into the Java array during the call.
  *
- * <p>This repository does NOT build an Android {@code .so}: no Android NDK exists on this host.
- * The class and jni/opurom_jni.h are compile-checked only; linking happens in R7+ on an NDK host.
+ * <p>The Android shared objects are built by {@code verify.mjs} with the Android NDK clang from
+ * {@code jni/opurom_jni.c} plus the Rust static library, for {@code aarch64-linux-android} and
+ * {@code x86_64-linux-android}. Those shared objects are never loaded on a device here: no
+ * emulator or system image is installed on this host.
  */
 public final class OpuromNative {
     public static final int OK = 0;

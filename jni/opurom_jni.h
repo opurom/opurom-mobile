@@ -5,9 +5,9 @@
  * JNI declaration for the Java class org.opurom.mobile.OpuromNative.
  *
  * This header mirrors the Java native methods with the exact JNI C symbol names generated for the
- * default `-jni` javac output. It includes <jni.h> from a real JDK and is only a compile-time
- * contract: this host has NO Android NDK, so NO libopurom_mobile.so or any other shared object is
- * built here. Shipping an Android library requires an NDK toolchain in R7+.
+ * default `-jni` javac output. It includes <jni.h> from a real JDK and is implemented by
+ * jni/opurom_jni.c, which the Android NDK clang links into libopurom_mobile.so for
+ * aarch64-linux-android and x86_64-linux-android.
  *
  * Ownership matches include/opurom.h: opuStateNew returns a heap state owned by the Java caller,
  * kept as an opaque jlong; opuStateFree must be called exactly once, and any nonzero jlong used
