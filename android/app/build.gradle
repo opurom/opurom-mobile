@@ -1,0 +1,30 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "org.opurom.mobile"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.opurom.mobile"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    sourceSets {
+        main {
+            // The JNI class is shipped once at the repository root and shared with every slice.
+            java.srcDirs += "../../jni"
+            // Populated by the NDK build in verify.mjs; build output, not committed.
+            jniLibs.srcDirs += ["../../target/android/jniLibs"]
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
