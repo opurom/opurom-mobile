@@ -1,0 +1,4 @@
+module COpuromMobile [system] {
+    header "../include/opurom.h"
+    export *
+}

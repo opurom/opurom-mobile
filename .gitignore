@@ -1,0 +1,8 @@
+# Rust build output
+/target/
+
+# OS noise
+.DS_Store
+
+# No JS dependencies or lockfiles are produced; this remains zero-dependency.
+node_modules/

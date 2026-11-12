@@ -1,0 +1,11 @@
+{
+  "name": "opurom-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OPUROM R6 mobile native artifacts: arm64 iOS Rust staticlib plus Swift/JNI compile checks.",
+  "scripts": {
+    "verify": "node verify.mjs",
+    "test": "node test/abi.test.mjs"
+  }
+}
