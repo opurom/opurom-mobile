@@ -1,6 +1,9 @@
 # Rust build output
 /target/
 
+# APK build output (deliverable artifact and debug keystore)
+/dist/
+
 # Gradle build output
 /android/.gradle/
 /android/build/
