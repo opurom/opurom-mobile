@@ -121,10 +121,20 @@ function findBuildTools(sdk) {
 }
 function findPlatform(sdk) {
   const root = path.join(sdk, 'platforms');
-  if (!existsSync(root)) return null;
-  const jars = readdirSync(root).sort().reverse()
-    .map((api) => path.join(root, api, 'android.jar')).filter((p) => existsSync(p));
-  return jars[0] || null;
+  const installed = existsSync(root) ? readdirSync(root).sort().reverse()
+    .filter((api) => statSync(path.join(root, api)).isDirectory()) : [];
+  const available = installed.filter((api) => existsSync(path.join(root, api, 'android.jar')));
+  const requested = process.env.OPR_ANDROID_API;
+  const selected = requested
+    ? (installed.includes(requested) ? requested : `android-${requested}`)
+    : available[0];
+  if (!available.includes(selected)) {
+    if (requested) {
+      die(`OPR_ANDROID_API=${requested} has no android.jar (available: ${available.join(', ') || 'none'}; installed: ${installed.join(', ') || 'none'})`);
+    }
+    return null;
+  }
+  return { api: selected.replace(/^android-/, ''), jar: path.join(root, selected, 'android.jar') };
 }
 
 function check(ok, label, result) {
@@ -140,8 +150,9 @@ const sdk = findSdk();
 if (!sdk) die('Android SDK not found (set OPR_ANDROID_SDK or ANDROID_HOME)');
 const buildTools = findBuildTools(sdk);
 if (!buildTools) die('build-tools with aapt2, zipalign, apksigner and d8.jar not found');
-const androidJar = findPlatform(sdk);
-if (!androidJar) die('no platforms/android-*/android.jar in the SDK');
+const platform = findPlatform(sdk);
+if (!platform) die('no platforms/android-*/android.jar in the SDK');
+const androidJar = platform.jar;
 const java = path.join(jdkBin, 'java');
 const javac = path.join(jdkBin, 'javac');
 const keytool = path.join(jdkBin, 'keytool');
@@ -182,11 +193,26 @@ let r = run('javac', [
 ]);
 check(r.ok && existsSync(path.join(classesDir, 'org', 'opurom', 'mobile', 'MainActivity.class')), 'javac app classes', r);
 
+// Anonymous listeners compile to nest-mate classes; d8 requires every one of
+// them on its program path, so collect the whole javac output rather than
+// naming two files.
+function classFiles(dir) {
+  const out = [];
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.class')) out.push(full);
+    }
+  };
+  walk(dir);
+  return out;
+}
+
 r = run('d8', [
   java, '-cp', d8Jar, 'com.android.tools.r8.D8', '--lib', androidJar,
   '--min-api', '24', '--output', dexWork,
-  path.join(classesDir, 'org', 'opurom', 'mobile', 'OpuromNative.class'),
-  path.join(classesDir, 'org', 'opurom', 'mobile', 'MainActivity.class'),
+  ...classFiles(classesDir),
 ]);
 const dex = path.join(dexWork, 'classes.dex');
 check(r.ok && existsSync(dex), 'd8 classes.dex', r);
@@ -288,7 +314,7 @@ check(r.ok && launchable, 'aapt2 launchable activity', r);
 
 const bytes = readFileSync(OUTPUT);
 const sha256 = createHash('sha256').update(bytes).digest('hex');
-say(`APK ready: ${OUTPUT}`);
+say(`APK ready: ${OUTPUT} | API ${platform.api} | build-tools ${path.basename(buildTools)}`);
 console.log(`package: org.opurom.mobile | launchable: ${launchable[1]} | schemes: ${schemes.join('+')}`);
 console.log(`size: ${statSync(OUTPUT).size} bytes | sha256: ${sha256}`);
 console.log('install: adb install -r dist/opurom-mobile-debug.apk');

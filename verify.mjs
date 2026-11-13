@@ -206,11 +206,18 @@ function findBuildTools(sdk) {
   return versions[0] || null;
 }
 
-// The newest platform directory that actually carries an android.jar.
+// OPR_ANDROID_API pins a platform; otherwise the newest directory with an
+// android.jar wins.
 function findPlatform(sdk) {
   if (!sdk) return null;
   const root = path.join(sdk, 'platforms');
   if (!existsSync(root)) return null;
+  const requested = process.env.OPR_ANDROID_API;
+  if (requested) {
+    const api = requested.startsWith('android-') ? requested : `android-${requested}`;
+    const jar = path.join(root, api, 'android.jar');
+    return existsSync(jar) ? { api, jar } : null;
+  }
   const versions = [];
   for (const entry of readdirSync(root).sort().reverse()) {
     const jar = path.join(root, entry, 'android.jar');
