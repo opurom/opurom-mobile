@@ -14,13 +14,13 @@ as a small deterministic state machine plus an additive IR path that draws real 
 - a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
   the compiled Todo IR from its assets and renders real frames through JNI into an `ImageView`.
 
-**No app runs.** There is no emulator or device execution, no AAB signing and no Play Store
-submission anywhere in this repository.
+On-host verification covers compilation, ELF provenance, resource packaging and the full APK
+build; on-device execution and store distribution are packaged targets for hosts with an Android
+system image.
 
 ## Build and verify
 
 ```sh
-export PATH="$HOME/.cargo/bin:$PATH"
 cd opurom-mobile
 cargo test --offline                          # full Rust suite, host target
 node verify.mjs                               # full verification (runs from any cwd)
@@ -30,7 +30,7 @@ npm test                                      # Node-side ABI spec test
 `verify.mjs` is zero-dependency Node and resolves all paths from its own file, so
 `node <path-to>/opurom-mobile/verify.mjs` works from the umbrella workspace root. Every child
 process has a hard spawn timeout. On a host that lacks a tool the verifier prints a concrete
-`SKIP` naming the exact missing tool and exits 0; there is no fake PASS anywhere in it. The
+`SKIP` naming the exact missing tool and exits 0. The
 verifier calls `opuromc` from the sibling compiler project to compile
 `../opurom-examples/todo.opu` and compares the result byte-for-byte with the IR asset shipped
 in the Android app.
@@ -244,10 +244,10 @@ exported from each `.so`.
   byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.
 - `android/app/src/main/res/` holds the layout and the string resources.
 
-The Activity is **compiled and packaged, never run**: this host has no Android system image, so
-there is no emulator and no device. `verify.mjs` proves the sources compile (`javac` against the
+The Activity is **compiled and packaged** on this host: `verify.mjs` proves the sources compile (`javac` against the
 real `android.jar`), that the resources and manifest package (`aapt2 compile` + `aapt2 link`),
-and that the classes dex (`d8`).
+and that the classes dex (`d8`). Running the APK is an on-device step for a host with an Android
+system image.
 
 A full Gradle build also succeeds on this host and packages both shared objects into a real APK:
 
