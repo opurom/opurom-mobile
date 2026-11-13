@@ -226,10 +226,14 @@ function enabledSchemes(output) {
 }
 
 function certificateDigests(output) {
-  // build-tools versions label signers either "Signer #1" or "V3.0 Signer:";
-  // public-key digests deliberately do not match.
-  return [...output.matchAll(/(?:Signer #\d+|v[\d.]+ Signer:) certificate SHA-256 digest: ([0-9a-f]{64})/gi)]
-    .map((match) => match[1]);
+  // apksigner versions label signers differently ("Signer #1", "V3.0 Signer:",
+  // or one line per enabled scheme), so accept any certificate digest line and
+  // deduplicate: a single signer can be reported several times.
+  const found = new Set();
+  for (const match of output.matchAll(/certificate SHA-256 digest:\s*([0-9a-f]{64})/gi)) {
+    found.add(match[1].toLowerCase());
+  }
+  return [...found].sort();
 }
 
 // Real zip local-header walk to find the payload range of a stored
@@ -310,10 +314,12 @@ test('re-running verification on the same APK yields identical digests', (t) => 
 
   const firstDigests = certificateDigests(firstRun.stdout);
   const secondDigests = certificateDigests(secondRun.stdout);
-  assert.equal(firstDigests.length, 1, `expected one signer digest, got ${firstRun.stdout}`);
+  assert.ok(firstDigests.length > 0,
+    `apksigner reported no certificate digest: ${firstRun.stdout}`);
   assert.deepEqual(secondDigests, firstDigests,
     're-verification must report identical certificate digests');
-  assert.match(firstDigests[0], /^[0-9a-f]{64}$/, 'the digest must be a 64-hex SHA-256');
+  assert.ok(firstDigests.every((d) => /^[0-9a-f]{64}$/.test(d)),
+    'every digest must be a 64-hex SHA-256');
   const firstSchemes = enabledSchemes(firstRun.stdout);
   assert.ok(firstSchemes.length > 0,
     `apksigner reported no enabled scheme: ${firstRun.stdout}`);
@@ -352,15 +358,39 @@ test('an APK re-signed with a different key is detected by its digest', (t) => {
   const tampered = tamperStoredEntry(signed, path.join(dir, 'tampered.apk'));
   const reSigned = signApk(tools, foreign, tampered, path.join(dir, 'resigned.apk'));
 
-  const oursVerify = verifyApk(tools, signed, ['--print-certs']);
-  const reSignedVerify = verifyApk(tools, reSigned, ['--print-certs']);
+  const oursVerify = verifyApk(tools, signed, ['--verbose', '--print-certs']);
+  const reSignedVerify = verifyApk(tools, reSigned, ['--verbose', '--print-certs']);
   assert.ok(oursVerify.ok, `apksigner verify failed: ${oursVerify.stderr}`);
   assert.ok(reSignedVerify.ok,
     'a foreign re-signature is structurally valid and must verify');
-  const oursDigest = certificateDigests(oursVerify.stdout)[0];
-  const reSignedDigest = certificateDigests(reSignedVerify.stdout)[0];
-  assert.match(oursDigest, /^[0-9a-f]{64}$/);
-  assert.match(reSignedDigest, /^[0-9a-f]{64}$/);
-  assert.notEqual(oursDigest, reSignedDigest,
+  const oursDigests = certificateDigests(oursVerify.stdout);
+  const reSignedDigests = certificateDigests(reSignedVerify.stdout);
+  assert.ok(oursDigests.length > 0 && reSignedDigests.length > 0,
+    `apksigner reported no certificate digest: ours=${oursVerify.stdout} foreign=${reSignedVerify.stdout}`);
+  assert.ok(oursDigests.every((d) => /^[0-9a-f]{64}$/.test(d))
+    && reSignedDigests.every((d) => /^[0-9a-f]{64}$/.test(d)));
+  assert.equal(oursDigests.length, 1, `expected one signing certificate, got ${oursDigests.length}`);
+  assert.equal(reSignedDigests.length, 1, `expected one signing certificate, got ${reSignedDigests.length}`);
+  assert.notEqual(oursDigests[0], reSignedDigests[0],
     'a re-signed APK must carry a different certificate digest, which exposes the swap');
+});
+
+test('certificate digests deduplicate per-scheme apksigner output', () => {
+  const a = 'a'.repeat(64);
+  const b = 'B'.repeat(64);
+  const multi = [
+    'Verifies',
+    'Verified using v1 scheme (JAR signing): true',
+    'Verified using v2 scheme (APK Signature Scheme v2): true',
+    'Signer #1 certificate SHA-256 digest: ' + a,
+    'V3.0 Signer: certificate SHA-256 digest: ' + a,
+    'V3.2 Signer: certificate SHA-256 digest: ' + a,
+  ].join('\n');
+  assert.deepEqual(certificateDigests(multi), [a]);
+  const two = [
+    'Signer #1 certificate SHA-256 digest: ' + a,
+    'Signer #2 certificate SHA-256 digest: ' + b,
+  ].join('\n');
+  assert.deepEqual(certificateDigests(two), [a, b.toLowerCase()].sort());
+  assert.deepEqual(certificateDigests('Verifies\nVerified using v1 scheme: true'), []);
 });
