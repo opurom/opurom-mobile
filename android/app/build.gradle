@@ -2,14 +2,20 @@ plugins {
     id "com.android.application"
 }
 
+def opuromCompileSdk = Integer.parseInt((project.findProperty("opuromCompileSdk") ?: "36").toString())
+def opuromTargetSdk = Integer.parseInt((project.findProperty("opuromTargetSdk") ?: "36").toString())
+def opuromMinSdk = Integer.parseInt((project.findProperty("opuromMinSdk") ?: "24").toString())
+def opuromNdkVersion = (project.findProperty("opuromNdkVersion") ?: "27.2.12479018").toString()
+
 android {
     namespace "org.opurom.mobile"
-    compileSdk 34
+    compileSdk opuromCompileSdk
+    ndkVersion = opuromNdkVersion
 
     defaultConfig {
         applicationId "org.opurom.mobile"
-        minSdk 24
-        targetSdk 34
+        minSdk opuromMinSdk
+        targetSdk opuromTargetSdk
         versionCode 1
         versionName "0.1.0"
     }
