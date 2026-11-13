@@ -318,21 +318,31 @@ exported from each `.so`.
 
 - `android/app/src/main/AndroidManifest.xml` declares `org.opurom.mobile.MainActivity` as the
   launcher activity.
-- `android/app/src/main/java/org/opurom/mobile/MainActivity.java` calls
-  `System.loadLibrary("opurom_mobile")`, reads the compiled Todo IR from
-  `android/app/src/main/assets/todo.opuir.json`, creates one reusable renderer for a 480x320
-  viewport and renders real OPUROM UI through JNI. Each tap changes the `remaining` state
-  override and renders another frame through the same renderer; the handle is released exactly
-  once in `onDestroy()`. A non-OK status or a missing asset raises immediately.
+- `android/app/src/main/java/org/opurom/mobile/MainActivity.java` builds the adaptive native
+  shell: a gradient header, session and task cards, and a Refresh/Reset action bar. Below
+  `600 dp` the shell is a single scrollable column; at `600 dp` and above it splits into two
+  columns. All typography uses platform typefaces at density-independent sizes, with a dark
+  palette selected from `uiMode`. Refresh rotates its glyph, fades the counter, re-renders the
+  frame and crossfades it; Reset restores the initial state. Every button has a ripple and a
+  press-scale animator.
+- `android/app/src/main/assets/dashboard.opuir.json` is a graphics-only IR: gradient header,
+  particle field and rounded cards with shadows. The self-drawn frame renders through JNI into
+  the card's actual viewport, so it fills the card instead of sitting at a fixed size. Native
+  text is layered above the frame, which is the documented hybrid mode: self-drawn graphics
+  plus native controls.
 - `android/app/src/main/assets/todo.opuir.json` is the exact output of
   `opuromc compile ../opurom-examples/todo.opu`; `verify.mjs` recompiles the source and compares
   byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.
-- `android/app/src/main/res/` holds the layout and the string resources.
+- `android/app/src/main/res/` holds the string resources; the layout is built in code so the
+  column breakpoint is a single measured value.
+
+`docs/adaptive-preview.png` shows the same shell at a narrow and a wide width, rendered offline
+with the real OPUROM frame embedded. It is a design reference, not a device capture.
 
 The Activity is **compiled and packaged** on this host: `verify.mjs` proves the sources compile (`javac` against the
 real `android.jar`), that the resources and manifest package (`aapt2 compile` + `aapt2 link`),
-and that the classes dex (`d8`). Running the APK is an on-device step for a host with an Android
-system image.
+and that the classes dex (`d8`). `npm run build:apk` produces a signed APK for on-device
+installation. Running the APK is an on-device step for a host with an Android system image.
 
 A full Gradle build also succeeds on this host and packages both shared objects into a real APK:
 
