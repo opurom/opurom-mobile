@@ -231,6 +231,85 @@ if (testRun.ok) {
 }
 
 // =====================================================================
+// 1b. Real-renderer C ABI tests and the measured per-frame render time.
+// =====================================================================
+const renderTest = run('cargo test real_render', [
+  'cargo', 'test', '--offline', '--test', 'real_render', '--', '--nocapture',
+], { timeoutMs: 180000 });
+if (renderTest.ok) {
+  const summary = renderTest.stdout.split('\n').find((line) => line.startsWith('test result:')) || '';
+  const measured = renderTest.stdout.match(/MEASURED[^\n]*/);
+  if (!measured) {
+    fail('real IR tests did not report a measured per-frame time', renderTest.stdout);
+  } else {
+    pass(`real IR C ABI: ${summary}`);
+    pass(measured[0]);
+  }
+} else {
+  fail('real IR C ABI tests failed', `${renderTest.stdout}\n${renderTest.stderr}`);
+}
+
+// =====================================================================
+// 1c. Compile the Todo example with opuromc and prove the shipped Android
+//     asset is exactly that compiled IR. Missing tools produce a concrete
+//     SKIP; the comparison is byte-for-byte, never a fake PASS.
+// =====================================================================
+const LANG_ROOT = path.resolve(ROOT, '..', 'opurom-lang');
+const TODO_SRC = path.resolve(ROOT, '..', 'opurom-examples', 'todo.opu');
+const TODO_ASSET = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'todo.opuir.json');
+const TODO_COMPILED = path.join(WORK, 'todo.opuir.json');
+
+function findOpuromc() {
+  const candidates = [];
+  if (process.env.OPUROMC) candidates.push(process.env.OPUROMC);
+  for (const profile of ['release', 'debug']) {
+    candidates.push(path.join(LANG_ROOT, 'target', profile, 'opuromc'));
+  }
+  return candidates.find((candidate) => existsSync(candidate)) || null;
+}
+
+let compiler = findOpuromc();
+if (!compiler && existsSync(path.join(LANG_ROOT, 'Cargo.toml'))) {
+  const compilerBuild = run('cargo build opuromc', [
+    'cargo', 'build', '--offline', '--manifest-path', path.join(LANG_ROOT, 'Cargo.toml'),
+  ], { timeoutMs: 300000, cwd: LANG_ROOT });
+  if (!compilerBuild.ok) {
+    console.error(`note: offline opuromc build failed: ${firstLine(compilerBuild.stderr)}`);
+  }
+  compiler = findOpuromc();
+}
+
+if (!compiler || !existsSync(TODO_SRC) || !existsSync(TODO_ASSET)) {
+  skip('Todo IR compilation needs ../opurom-examples/todo.opu, the shipped IR asset and opuromc at ../opurom-lang/target/{debug,release}/opuromc.');
+} else {
+  const compiledRun = run('opuromc compile todo.opu', [
+    compiler, 'compile', TODO_SRC, '-o', TODO_COMPILED,
+  ], { timeoutMs: 120000 });
+  if (!compiledRun.ok) {
+    fail('opuromc compile of the Todo example failed',
+      `${compiledRun.stdout}\n${compiledRun.stderr}`);
+  } else {
+    const compiled = readFileSync(TODO_COMPILED, 'utf8');
+    const shipped = readFileSync(TODO_ASSET, 'utf8');
+    let parsed;
+    try {
+      parsed = JSON.parse(compiled);
+    } catch (error) {
+      fail('compiled Todo IR is not JSON', String(error));
+    }
+    if (parsed && compiled === shipped && parsed.ir === '0.1' &&
+        parsed.app === 'TodoApp' &&
+        Array.isArray(parsed.state) && parsed.state.some((s) => s.name === 'remaining') &&
+        parsed.tree && parsed.tree.kind === 'Column') {
+      pass(`opuromc compiled Todo IR matches the shipped Android asset (${compiled.length} bytes, ir ${parsed.ir}, app ${parsed.app})`);
+    } else {
+      fail('shipped Android IR asset differs from a fresh opuromc compilation',
+        `compiled ${compiled.length} bytes, shipped ${shipped.length} bytes`);
+    }
+  }
+}
+
+// =====================================================================
 // 2. Cross-compile the staticlib for aarch64-apple-ios (offline).
 //    The iOS slice needs macOS; on other hosts it is a concrete SKIP.
 // =====================================================================
@@ -453,10 +532,19 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuDispatch',
       'Java_org_opurom_mobile_OpuromNative_opuFrame',
       'Java_org_opurom_mobile_OpuromNative_opuStateFree',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererNew',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererFrame',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererFree',
+      'Java_org_opurom_mobile_OpuromNative_opuFrameFromIr',
     ];
-    const missing = jniSymbols.filter((symbol) => !dynsyms.stdout.includes(symbol));
+    const abiSymbols = [
+      'opu_state_new', 'opu_dispatch', 'opu_frame', 'opu_state_free',
+      'opu_frame_from_ir', 'opu_renderer_new', 'opu_renderer_frame', 'opu_renderer_free',
+    ];
+    const missing = [...jniSymbols, ...abiSymbols]
+      .filter((symbol) => !dynsyms.stdout.includes(symbol));
     if (missing.length === 0) {
-      pass(`${abi} exports all 4 JNI entry points and the 4 C ABI symbols`);
+      pass(`${abi} exports all ${jniSymbols.length} JNI entry points and all ${abiSymbols.length} C ABI symbols`);
     } else {
       fail(`${abi} shared object is missing exported symbols: ${missing.join(', ')}`,
         dynsyms.stdout);
@@ -572,16 +660,27 @@ if (!buildTools) {
       skip('aapt2 link skipped: android.jar not found (no platforms/android-*/android.jar ' +
         `under ${sdk || 'the Android SDK'}).`);
     } else {
+      const assetsDir = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets');
       const linkRun = run('aapt2 link', [
         aapt2, 'link', '-o', path.join(aapt2Work, 'linked', 'app.apk'),
         '-I', platform.jar,
+        '-A', assetsDir,
         '--manifest', path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
         path.join(aapt2Work, 'compiled', 'res.zip'),
       ], { timeoutMs: 120000 });
       const apk = path.join(aapt2Work, 'linked', 'app.apk');
       if (linkRun.ok && existsSync(apk)) {
-        pass(`aapt2 link OK: AndroidManifest.xml + resources -> ${apk} ` +
+        pass(`aapt2 link OK: AndroidManifest.xml + resources + Todo IR asset -> ${apk} ` +
           `(${statSync(apk).size} bytes, ${linkRun.ms}ms)`);
+        const listing = run('unzip -l', ['unzip', '-l', apk], { timeoutMs: 30000 });
+        if (/ENOENT|not found/i.test(listing.stderr)) {
+          skip('unzip(1) is unavailable: APK asset listing not checked (aapt2 link succeeded).');
+        } else if (listing.ok && listing.stdout.includes('assets/todo.opuir.json')) {
+          pass('aapt2 APK contains the compiled Todo IR asset');
+        } else {
+          fail('aapt2 APK is missing the compiled Todo IR asset',
+            listing.stdout || listing.stderr);
+        }
       } else {
         fail('aapt2 link failed', `${linkRun.stdout}\n${linkRun.stderr}`);
       }

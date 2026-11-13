@@ -7,8 +7,99 @@ public enum OpuromEvent {
 
 public enum OpuromMobileError: Error, Equatable {
     case stateUnavailable
+    case rendererUnavailable
     case invalidBuffer
     case abi(Int32)
+}
+
+/// One-shot real IR frame. `stateJSON` may be `{}` for the IR initial state.
+public enum OpuromIRFrame {
+    public static func frame(
+        irJSON: String,
+        stateJSON: String,
+        into buffer: UnsafeMutableBufferPointer<UInt8>,
+        width: UInt32,
+        height: UInt32
+    ) throws {
+        guard let baseAddress = buffer.baseAddress else {
+            throw OpuromMobileError.invalidBuffer
+        }
+        try checkBuffer(buffer, width: width, height: height)
+        let ir = Array(irJSON.utf8)
+        let state = Array(stateJSON.utf8)
+        let status = ir.withUnsafeBufferPointer { irBytes in
+            state.withUnsafeBufferPointer { stateBytes in
+                opu_frame_from_ir(
+                    irBytes.baseAddress, irBytes.count,
+                    stateBytes.baseAddress, stateBytes.count,
+                    baseAddress, width, height)
+            }
+        }
+        guard status == Int32(OPU_OK) else {
+            throw OpuromMobileError.abi(status)
+        }
+    }
+}
+
+/// Owns one reusable renderer; deinit is the single free site.
+public final class OpuromIRRenderer {
+    private var handle: OpaquePointer?
+    private let width: UInt32
+    private let height: UInt32
+
+    public init(width: UInt32, height: UInt32) throws {
+        guard let created = opu_renderer_new(width, height) else {
+            throw OpuromMobileError.rendererUnavailable
+        }
+        handle = created
+        self.width = width
+        self.height = height
+    }
+
+    deinit {
+        if let owned = handle {
+            opu_renderer_free(owned)
+        }
+    }
+
+    public func frame(
+        irJSON: String,
+        stateJSON: String,
+        into buffer: UnsafeMutableBufferPointer<UInt8>
+    ) throws {
+        guard let owned = handle, let baseAddress = buffer.baseAddress else {
+            throw OpuromMobileError.invalidBuffer
+        }
+        try checkBuffer(buffer, width: width, height: height)
+        let ir = Array(irJSON.utf8)
+        let state = Array(stateJSON.utf8)
+        let status = ir.withUnsafeBufferPointer { irBytes in
+            state.withUnsafeBufferPointer { stateBytes in
+                opu_renderer_frame(
+                    owned, irBytes.baseAddress, irBytes.count,
+                    stateBytes.baseAddress, stateBytes.count,
+                    baseAddress, width, height)
+            }
+        }
+        guard status == Int32(OPU_OK) else {
+            throw OpuromMobileError.abi(status)
+        }
+    }
+}
+
+private func checkBuffer(
+    _ buffer: UnsafeMutableBufferPointer<UInt8>,
+    width: UInt32,
+    height: UInt32
+) throws {
+    let (pixels, pixelsOverflow) = width.multipliedReportingOverflow(by: height)
+    guard !pixelsOverflow else {
+        throw OpuromMobileError.invalidBuffer
+    }
+    let (bytes, bytesOverflow) = pixels.multipliedReportingOverflow(by: 4)
+    guard !bytesOverflow, buffer.count >= Int(bytes) else {
+        throw OpuromMobileError.invalidBuffer
+    }
 }
 
 /// Owns one C state; deinit is the single free site.

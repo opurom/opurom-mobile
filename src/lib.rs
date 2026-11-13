@@ -1,4 +1,8 @@
-//! Pure-std Rust C ABI for the arm64 iOS static library.
+//! Rust C ABI for the arm64 iOS static library and the Android shared objects.
+//!
+//! The original counter state machine is unchanged. The additive IR path parses OPUIR v0.1 and
+//! state overrides with `opurom-render` and writes real RGBA8 frames; malformed input is a
+//! status value, never a panic or an abort.
 //!
 //! Ownership: `opu_state_new` allocates one opaque state whose counter starts at zero. The caller
 //! owns that pointer and must pass it to `opu_state_free` exactly once. A null state pointer is
@@ -12,6 +16,7 @@
 //! Panics inside Rust code are caught and returned as `OPU_ERR_PANIC`; an abort or an invalid
 //! pointer remains undefined behavior. This ABI is not thread-safe for one state: serialize calls.
 
+use opurom_render::{parse_ir, parse_state_json, Ir, Renderer, StateView, SETTLED_MS};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -21,12 +26,15 @@ pub const OPU_ERR_EVENT: i32 = 2;
 pub const OPU_ERR_DIMENSION: i32 = 3;
 pub const OPU_ERR_OVERFLOW: i32 = 4;
 pub const OPU_ERR_PANIC: i32 = 5;
+pub const OPU_ERR_IR: i32 = 6;
+pub const OPU_ERR_STATE: i32 = 7;
 
 pub const OPU_EVENT_TAP: u32 = 1;
 pub const OPU_EVENT_RESET: u32 = 2;
 
 pub const OPU_MAX_DIMENSION: u32 = 4096;
 pub const OPU_MAX_FRAME_BYTES: usize = 67108864;
+pub const OPU_MAX_JSON_BYTES: usize = 16777216;
 
 /// Opaque state. C callers see only an incomplete struct type and must not access fields.
 #[repr(C)]
@@ -154,6 +162,158 @@ pub extern "C" fn opu_state_free(state: *mut OpuState) {
         },
         (),
     );
+}
+
+/// Opaque reusable renderer. C callers see only an incomplete struct type.
+#[repr(C)]
+pub struct OpuRenderer {
+    renderer: Renderer,
+    width: u32,
+    height: u32,
+}
+
+/// Borrow one caller-owned JSON document. Lengths are bounded before any read so
+/// a malformed call is a status value instead of an out-of-bounds access.
+fn json_str<'a>(ptr: *const u8, len: usize, code: i32) -> Result<&'a str, i32> {
+    if ptr.is_null() {
+        return Err(OPU_ERR_NULL);
+    }
+    if len == 0 || len > OPU_MAX_JSON_BYTES || len > isize::MAX as usize {
+        return Err(code);
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    std::str::from_utf8(bytes).map_err(|_| code)
+}
+
+fn frame_inputs(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> Result<(Ir, StateView, usize), i32> {
+    if ir_json.is_null() || state_json.is_null() || out.is_null() {
+        return Err(OPU_ERR_NULL);
+    }
+    let byte_len = frame_len(width, height).ok_or(OPU_ERR_DIMENSION)?;
+    let ir = parse_ir(json_str(ir_json, ir_len, OPU_ERR_IR)?).map_err(|_| OPU_ERR_IR)?;
+    let state = parse_state_json(&ir, json_str(state_json, state_len, OPU_ERR_STATE)?)
+        .map_err(|_| OPU_ERR_STATE)?;
+    Ok((ir, state, byte_len))
+}
+
+fn write_pixels(pixels: &[u8], out: *mut u8, byte_len: usize) -> i32 {
+    if pixels.len() != byte_len {
+        return OPU_ERR_DIMENSION;
+    }
+    unsafe { std::ptr::copy_nonoverlapping(pixels.as_ptr(), out, byte_len) };
+    OPU_OK
+}
+
+/// Creates one renderer bound to a viewport. Returns NULL on invalid dimensions,
+/// allocation failure or a caught Rust panic. Free with `opu_renderer_free`.
+#[no_mangle]
+pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer {
+    ffi_guard(
+        || {
+            if frame_len(width, height).is_none() {
+                return std::ptr::null_mut();
+            }
+            let Ok(renderer) = Renderer::try_new(width, height) else {
+                return std::ptr::null_mut();
+            };
+            Box::into_raw(Box::new(OpuRenderer {
+                renderer,
+                width,
+                height,
+            }))
+        },
+        std::ptr::null_mut(),
+    )
+}
+
+/// Releases one renderer returned by `opu_renderer_new`. NULL is a no-op.
+#[no_mangle]
+pub extern "C" fn opu_renderer_free(renderer: *mut OpuRenderer) {
+    if renderer.is_null() {
+        return;
+    }
+    let _ = ffi_guard(
+        || unsafe {
+            drop(Box::from_raw(renderer));
+        },
+        (),
+    );
+}
+
+/// Parses an IR v0.1 document plus a JSON object of state overrides, renders one
+/// settled frame with the real renderer and writes `width * height * 4` RGBA8
+/// bytes into `out`. `state_json` may be `{}` to use the IR initial values.
+/// OPU_ERR_NULL: null pointer, OPU_ERR_DIMENSION: invalid viewport,
+/// OPU_ERR_IR: malformed IR, OPU_ERR_STATE: malformed state,
+/// OPU_ERR_PANIC: caught Rust panic, OPU_OK: success.
+#[no_mangle]
+pub extern "C" fn opu_frame_from_ir(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || {
+            let (ir, state, byte_len) =
+                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
+                    Ok(inputs) => inputs,
+                    Err(code) => return code,
+                };
+            let Ok(renderer) = Renderer::try_new(width, height) else {
+                return OPU_ERR_DIMENSION;
+            };
+            let pixels = renderer.pixels_at(&ir, &state, SETTLED_MS);
+            write_pixels(&pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Renders one frame through a reusable renderer. `width` and `height` must
+/// match the viewport passed to `opu_renderer_new`. Error codes match
+/// `opu_frame_from_ir`, plus OPU_ERR_NULL for a null renderer handle.
+#[no_mangle]
+pub extern "C" fn opu_renderer_frame(
+    renderer: *mut OpuRenderer,
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            if (owned.width, owned.height) != (width, height) {
+                return OPU_ERR_DIMENSION;
+            }
+            let (ir, state, byte_len) =
+                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
+                    Ok(inputs) => inputs,
+                    Err(code) => return code,
+                };
+            let frame = owned.renderer.render_at(&ir, &state, SETTLED_MS);
+            write_pixels(&frame.pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
 }
 
 #[cfg(test)]

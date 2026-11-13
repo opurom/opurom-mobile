@@ -1,0 +1,96 @@
+{
+  "api": [
+    {
+      "handlers": [
+        "list",
+        "create"
+      ],
+      "model": "Todo",
+      "path": "/todos"
+    },
+    {
+      "handlers": [
+        "get",
+        "update",
+        "delete"
+      ],
+      "model": "Todo",
+      "path": "/todos/:id"
+    }
+  ],
+  "app": "TodoApp",
+  "ir": "0.1",
+  "models": [
+    {
+      "fields": [
+        {
+          "default": null,
+          "name": "id",
+          "primary": true,
+          "type": "int"
+        },
+        {
+          "default": null,
+          "name": "title",
+          "primary": false,
+          "type": "string"
+        },
+        {
+          "default": false,
+          "name": "done",
+          "primary": false,
+          "type": "bool"
+        }
+      ],
+      "name": "Todo"
+    }
+  ],
+  "state": [
+    {
+      "init": 0,
+      "name": "remaining",
+      "type": "int"
+    }
+  ],
+  "theme": {
+    "accent": "#4F46E5",
+    "mode": "system",
+    "radius": 12
+  },
+  "tree": {
+    "children": [
+      {
+        "children": [],
+        "events": {},
+        "id": 1,
+        "kind": "Text",
+        "props": {
+          "size": 20,
+          "value": "OPUROM Todo - remaining: {remaining}"
+        }
+      },
+      {
+        "children": [],
+        "events": {
+          "tap": {
+            "op": "add",
+            "target": "remaining",
+            "value": 1
+          }
+        },
+        "id": 2,
+        "kind": "Button",
+        "props": {
+          "label": "Refresh"
+        }
+      }
+    ],
+    "events": {},
+    "id": 0,
+    "kind": "Column",
+    "props": {
+      "gap": 8,
+      "padding": 16
+    }
+  }
+}

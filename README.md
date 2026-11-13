@@ -1,18 +1,18 @@
 # opurom-mobile
 
 **Mobile native artifacts** slice of OPUROM ([PLATFORM_DELIVERY.md](../opurom-spec/PLATFORM_DELIVERY.md), section 3) plus the
-**Android native library and app module** slice ([NATIVE_NETWORK.md](../opurom-spec/NATIVE_NETWORK.md), section 3). One independent
-local git repo, one pure-std Rust crate, no external crates, no network at build time. It
-implements the C ABI of the [Platform Adapter contract](../opurom-spec/ADAPTER_CONTRACT.md) as a
-small deterministic state machine and proves these compile-level deliverables:
+**Android native library and app module** slice ([NATIVE_NETWORK.md](../opurom-spec/NATIVE_NETWORK.md), section 3). One independent local git repo, one Rust crate with a path dependency on the sibling
+[opurom-render](../opurom-render/README.md) software renderer, and no network access at build
+time. It implements the C ABI of the [Platform Adapter contract](../opurom-spec/ADAPTER_CONTRACT.md)
+as a small deterministic state machine plus an additive IR path that draws real OPUROM UI:
 
 - a real `aarch64-apple-ios` static library with `file`/`lipo`/`otool` evidence;
-- a Swift wrapper typechecked against the C header via a module map;
+- a Swift wrapper typechecked against the C header via a module map, including the IR entry points;
 - a JNI declaration compiled with `javac`;
 - real ELF Android shared objects for `aarch64-linux-android` and `x86_64-linux-android`,
   built with the Android NDK clang, with ELF magic bytes and machine type proven;
 - a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
-  the library through the JNI layer and renders a frame into an `ImageView`.
+  the compiled Todo IR from its assets and renders real frames through JNI into an `ImageView`.
 
 **No app runs.** There is no emulator or device execution, no AAB signing and no Play Store
 submission anywhere in this repository.
@@ -22,7 +22,7 @@ submission anywhere in this repository.
 ```sh
 export PATH="$HOME/.cargo/bin:$PATH"
 cd opurom-mobile
-cargo test --offline --lib                    # Rust unit tests, host target
+cargo test --offline                          # full Rust suite, host target
 node verify.mjs                               # full verification (runs from any cwd)
 npm test                                      # Node-side ABI spec test
 ```
@@ -30,7 +30,10 @@ npm test                                      # Node-side ABI spec test
 `verify.mjs` is zero-dependency Node and resolves all paths from its own file, so
 `node <path-to>/opurom-mobile/verify.mjs` works from the umbrella workspace root. Every child
 process has a hard spawn timeout. On a host that lacks a tool the verifier prints a concrete
-`SKIP` naming the exact missing tool and exits 0; there is no fake PASS anywhere in it.
+`SKIP` naming the exact missing tool and exits 0; there is no fake PASS anywhere in it. The
+verifier calls `opuromc` from the sibling compiler project to compile
+`../opurom-examples/todo.opu` and compares the result byte-for-byte with the IR asset shipped
+in the Android app.
 
 ### Toolchain discovery
 
@@ -57,25 +60,56 @@ x86_64-linux-android`.
 
 | Check | Actual result |
 | --- | --- |
-| `cargo test --offline --lib` | `6 passed; 0 failed; 0 ignored` |
-| `cargo test --offline --test android_elf` | `1 passed; 0 failed` |
+| `cargo test --offline` (host) | `13 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
-| `cargo build --release --target aarch64-apple-ios --offline` | archive written, `18412568` bytes |
+| `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
+| `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
+| `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
 | `file libopurom_mobile.a` | `current ar archive` |
 | `lipo -info libopurom_mobile.a` | `Non-fat file ... is architecture: arm64` |
 | `otool -l libopurom_mobile.a` | `LC_VERSION_MIN_IPHONEOS` present (iOS platform) |
 | `xcrun --sdk iphoneos swiftc -typecheck` | pass, SDK `iPhoneOS27.2.sdk`, Swift 6.4.2 |
 | `javac` (JNI declaration) | `javac 21.0.13` compiled `org/opurom/mobile/OpuromNative.class` |
 | `clang -fsyntax-only` on `jni/opurom_jni.h` | pass against the same JDK's `jni.h` |
-| `cargo build --release --target aarch64-linux-android` | Rust staticlib, `24447174` bytes |
-| `cargo build --release --target x86_64-linux-android` | Rust staticlib, `24016844` bytes |
-| NDK clang `-shared` (arm64) | `libopurom_mobile.so`, `7075928` bytes, real ELF |
-| NDK clang `-shared` (x86_64) | `libopurom_mobile.so`, `6664912` bytes, real ELF |
+| `cargo build --release --target aarch64-linux-android` | Rust staticlib, `25830068` bytes |
+| `cargo build --release --target x86_64-linux-android` | Rust staticlib, `25473494` bytes |
+| NDK clang `-shared` (arm64) | `libopurom_mobile.so`, `7788048` bytes, real ELF |
+| NDK clang `-shared` (x86_64) | `libopurom_mobile.so`, `7420576` bytes, real ELF |
 | `javac` (Android app sources) | `javac 21.0.13 --release 17` compiled `MainActivity.class` |
-| `aapt2 compile` + `aapt2 link` | `res.zip` + `app.apk`, `1375` bytes |
-| `d8` (build-tools 34.0.0) | `classes.dex`, DEX version `035`, `2820` bytes |
-| `gradle :app:assembleDebug` | `BUILD SUCCESSFUL`, `app-debug.apk`, `13752892` bytes |
-| `node verify.mjs` | `24 passed, 1 skipped, 0 failed` (exit 0) |
+| `aapt2 compile` + `aapt2 link` | `res.zip` + `app.apk`, `1977` bytes, IR asset present |
+| `d8` (build-tools 34.0.0) | `classes.dex`, `5284` bytes |
+| `gradle :app:assembleDebug` | `BUILD SUCCESSFUL`, `app-debug.apk`, `21175532` bytes |
+| `node verify.mjs` | `28 passed, 1 skipped, 0 failed` (exit 0) |
+
+### Measured library sizes and render time
+
+Release artifacts were built twice on this host with the same toolchain: once before the
+`opurom-render` path dependency was added and once after. Both columns are measured byte counts
+of the files on disk.
+
+| Artifact | Before (bytes) | After (bytes) | Change |
+| --- | ---: | ---: | ---: |
+| `aarch64-apple-ios` staticlib | 18412568 | 19393896 | +981328 (+5.33%) |
+| `aarch64-linux-android` staticlib | 24447174 | 25830068 | +1382894 (+5.66%) |
+| `x86_64-linux-android` staticlib | 24016844 | 25473494 | +1456650 (+6.07%) |
+| arm64 `libopurom_mobile.so` | 7075928 | 7788048 | +712120 (+10.06%) |
+| x86_64 `libopurom_mobile.so` | 6664912 | 7420576 | +755664 (+11.34%) |
+
+The growth is the renderer's layout, raster, font and IR parser code plus its `serde_json`
+dependency. The linked `.so` files contain that code because the NDK clang links the Rust
+static library with `--whole-archive`.
+
+`tests/real_render.rs` measures the IR path with `std::time::Instant` over 24 frames of the
+compiled Todo IR at 320x240, including IR and state JSON parsing, layout and RGBA8 raster:
+
+| Build | Measured total | Measured per frame |
+| --- | ---: | ---: |
+| `cargo test --offline --test real_render` (debug) | 124845 us | 5201 us |
+| `cargo test --offline --release --test real_render` | 10433 us | 434 us |
+
+These are measured wall-clock durations on this host for that fixed workload, not a throughput
+or frame-rate claim; timings vary with host load. `node verify.mjs` prints the debug measurement
+on every run.
 
 ### Real ELF evidence for the Android shared objects
 
@@ -119,26 +153,49 @@ $ llvm-readelf -h ... | grep Machine
 
 `EM_AARCH64` is 183 and `EM_X86_64` is 62; `verify.mjs` asserts those exact numbers, and the Rust
 test `tests/android_elf.rs` reads `e_machine` straight out of the ELF header bytes. Both shared
-objects export the four `Java_org_opurom_mobile_OpuromNative_*` entry points and the four plain C
-ABI symbols, which `verify.mjs` checks with `llvm-readelf --dyn-syms`.
+objects export the eight `Java_org_opurom_mobile_OpuromNative_*` entry points and the eight plain
+C ABI symbols, which `verify.mjs` checks with `llvm-readelf --dyn-syms`.
 
 ## C ABI: ownership, lifetime, validation
 
 ```c
+/* Original state-machine ABI, unchanged */
 OpuState *opu_state_new(void);                       /* caller owns; NULL on failure */
 int32_t   opu_dispatch(OpuState *state, uint32_t event_id);
 int32_t   opu_frame(OpuState *state, uint8_t *out, uint32_t width, uint32_t height);
 void      opu_state_free(OpuState *state);           /* exactly once; NULL is a no-op */
+
+/* Additive IR ABI: real OPUROM UI */
+OpuRenderer *opu_renderer_new(uint32_t width, uint32_t height);
+void         opu_renderer_free(OpuRenderer *renderer);
+int32_t      opu_frame_from_ir(const uint8_t *ir_json, size_t ir_len,
+                               const uint8_t *state_json, size_t state_len,
+                               uint8_t *out, uint32_t width, uint32_t height);
+int32_t      opu_renderer_frame(OpuRenderer *renderer,
+                                const uint8_t *ir_json, size_t ir_len,
+                                const uint8_t *state_json, size_t state_len,
+                                uint8_t *out, uint32_t width, uint32_t height);
 ```
 
 - **State:** one integer counter starting at 0. `OPU_EVENT_TAP` (1) does a checked `+1`,
   `OPU_EVENT_RESET` (2) sets it to 0; any other id returns `OPU_ERR_EVENT` without mutation, and
-  counter overflow returns `OPU_ERR_OVERFLOW` without mutation.
+  counter overflow returns `OPU_ERR_OVERFLOW` without mutation. The four original entry points
+  keep their exact signatures, return codes and behaviour.
 - **Frame:** `opu_frame` writes `width * height` row-major RGBA8 pixels (alpha always 255) into
   the caller's `out`, which must hold at least `width * height * 4` writable bytes. Dimensions
   must be nonzero and at most `OPU_MAX_DIMENSION` (4096), within `OPU_MAX_FRAME_BYTES` (64 MiB).
-- **Nulls are never dereferenced:** every status-returning function checks `state` and `out`
-  before use and returns `OPU_ERR_NULL`; `opu_state_free(NULL)` is a no-op.
+- **IR:** `opu_frame_from_ir` parses IR v0.1 through `opurom-render`'s `parse_ir`, applies a JSON
+  object of state overrides (`{}` means the IR initial values), builds a `Renderer` with
+  `Renderer::try_new` and writes its `pixels_at` output as RGBA8. A malformed IR returns
+  `OPU_ERR_IR` (6), malformed state `OPU_ERR_STATE` (7); neither can panic or abort. JSON inputs
+  are borrowed, length-checked up to `OPU_MAX_JSON_BYTES` (16 MiB) and need no NUL terminator.
+- **Reuse:** `opu_renderer_new` returns one caller-owned renderer for a fixed viewport (NULL on
+  invalid dimensions or failure). `opu_renderer_frame` renders through it, keeping the previous
+  frame for dirty-rect diffing; `width`/`height` must match, and the caller frees exactly once
+  with `opu_renderer_free`. A null renderer returns `OPU_ERR_NULL`.
+- **Nulls are never dereferenced:** every status-returning function checks its pointer arguments
+  before use and returns `OPU_ERR_NULL`; `opu_state_free(NULL)` and `opu_renderer_free(NULL)` are
+  no-ops.
 - **Ownership:** the caller frees exactly once after `opu_state_new` succeeded. Double free,
   foreign pointers, use-after-free and unsynchronized concurrent calls on one state are invalid
   and cannot be checked in Rust; they are undefined behavior, documented rather than papered over.
@@ -150,18 +207,24 @@ void      opu_state_free(OpuState *state);           /* exactly once; NULL is a 
 ## Swift wrapper
 
 `swift/module.modulemap` exposes `include/opurom.h` as the `COpuromMobile` module;
-`swift/OpuromMobile.swift` imports it, wraps `opu_state_new`/`opu_state_free` in a final class
-whose `deinit` is the single free site, checks the output buffer size before calling
-`opu_frame`, and surfaces non-`OPU_OK` statuses as `OpuromMobileError`. Verified by typecheck
-only (no simulator runtime on this host).
+`swift/OpuromMobile.swift` imports it. `OpuromState` wraps `opu_state_new`/`opu_state_free` in a
+final class whose `deinit` is the single free site, checks the output buffer size before calling
+`opu_frame`, and surfaces non-`OPU_OK` statuses as `OpuromMobileError`. `OpuromIRFrame.frame` is
+a one-shot real IR render; `OpuromIRRenderer` owns one reusable renderer handle with `deinit` as
+its single free site. Both validate the buffer size before the native call. Verified by
+typecheck against the iPhoneOS SDK (no simulator runtime on this host).
 
 ## JNI layer
 
-`jni/OpuromNative.java` (`org.opurom.mobile`) declares the four native methods with `long`
+`jni/OpuromNative.java` (`org.opurom.mobile`) declares the four original native methods plus four
+IR methods (`opuRendererNew`, `opuRendererFrame`, `opuRendererFree`, `opuFrameFromIr`) with `long`
 handles. `jni/opurom_jni.h` gives the exact `Java_org_opurom_mobile_OpuromNative_*` signatures
 against a real `jni.h`, and `jni/opurom_jni.c` implements them: it forwards to the plain C ABI and
 copies the RGBA bytes into the Java `byte[]` during the native call, so no pointer into Rust
-memory outlives that call. The shim is linked into both Android shared objects.
+memory outlives that call. The IR shim pins the three arrays, releases the inputs with
+`JNI_ABORT` and copies the output back with mode 0. The shim is linked into both Android shared
+objects, and `verify.mjs` asserts that all eight JNI symbols and all eight C ABI symbols are
+exported from each `.so`.
 
 ## Android app module
 
@@ -171,9 +234,14 @@ memory outlives that call. The shim is linked into both Android shared objects.
 - `android/app/src/main/AndroidManifest.xml` declares `org.opurom.mobile.MainActivity` as the
   launcher activity.
 - `android/app/src/main/java/org/opurom/mobile/MainActivity.java` calls
-  `System.loadLibrary("opurom_mobile")`, allocates one native state, applies one tap event, asks
-  the native side for a 256x256 RGBA frame, converts it to packed ARGB and shows it in an
-  `ImageView`. The native handle is released exactly once in `onDestroy()`.
+  `System.loadLibrary("opurom_mobile")`, reads the compiled Todo IR from
+  `android/app/src/main/assets/todo.opuir.json`, creates one reusable renderer for a 256x256
+  viewport and renders real OPUROM UI through JNI. Each tap changes the `remaining` state
+  override and renders another frame through the same renderer; the handle is released exactly
+  once in `onDestroy()`. A non-OK status or a missing asset raises immediately.
+- `android/app/src/main/assets/todo.opuir.json` is the exact output of
+  `opuromc compile ../opurom-examples/todo.opu`; `verify.mjs` recompiles the source and compares
+  byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.
 - `android/app/src/main/res/` holds the layout and the string resources.
 
 The Activity is **compiled and packaged, never run**: this host has no Android system image, so
@@ -191,8 +259,9 @@ JAVA_HOME=<jdk21> ANDROID_HOME=<sdk> gradle :app:assembleDebug
 ```
 $ unzip -l app/build/outputs/apk/debug/app-debug.apk
    1072  classes.dex
- 7075928  lib/arm64-v8a/libopurom_mobile.so
- 6664912  lib/x86_64/libopurom_mobile.so
+ 7788048  lib/arm64-v8a/libopurom_mobile.so
+ 7420576  lib/x86_64/libopurom_mobile.so
+   1602  assets/todo.opuir.json
    1980  AndroidManifest.xml
 ```
 
@@ -208,12 +277,19 @@ Plugin from a network repository, so it is not part of the offline `verify.mjs` 
 | Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) |
 | `javac` compile of the JNI declaration, the app sources and the JNI header syntax check |
 | `aapt2` resource compile + manifest/resource link, `d8` dexing |
-| `gradle :app:assembleDebug` producing a real APK with both `.so` files |
-| Swift wrapper typecheck against the C header |
-| Pure-std Rust state machine with unit + ELF + Node spec tests |
+| `gradle :app:assembleDebug` producing a real APK with both `.so` files and the IR asset |
+| Swift wrapper typecheck against the C header, including the IR entry points |
+| Rust unit, ELF, real-renderer and Node spec tests |
 | Offline, bounded verifier with tool-specific SKIPs |
+| IR C ABI pixels equal the shared software renderer's pixels; malformed IR returns status values |
+| Measured artifact size growth and measured per-frame render time |
 
-The state machine is intentionally tiny (counter + tap); `opurom-core` owns the
-full kernel. The Android shared objects are linked and packaged, and the app
-sources are compiled and packaged.
+The original counter state machine is intentionally tiny and stays byte-compatible;
+`opurom-core` owns the full kernel. The IR path draws real UI with the shared software
+renderer. The Android shared objects are linked and packaged, and the app sources are compiled
+and packaged; the Activity is never executed on a device here. Both shared objects export the
+eight JNI entry points and the eight C ABI symbols.
+
+`opurom-render` was also checked with `cargo check --target aarch64-apple-ios --offline` and
+`cargo check --target aarch64-linux-android --offline`; both succeed.
 

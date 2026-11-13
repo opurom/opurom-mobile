@@ -10,3 +10,4 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+opurom-render = { path = "../opurom-render" }
