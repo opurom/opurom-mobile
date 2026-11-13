@@ -13,6 +13,9 @@ import test from 'node:test';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = path.join(ROOT, 'dist', 'opurom-mobile-debug.apk');
+const JNI_LIBS = ['arm64-v8a', 'x86_64'].map((abi) => path.join(
+  ROOT, 'target', 'android', 'jniLibs', abi, 'libopurom_mobile.so',
+));
 
 function toolchainRoots() {
   const roots = [];
@@ -66,6 +69,11 @@ test('the built APK is signed, aligned, launchable and deterministic', (t) => {
   const tools = findToolchain();
   if (!tools) {
     t.skip('APK build needs an Android SDK (platforms + build-tools) and JAVA_HOME');
+    return;
+  }
+  // The NDK shared objects are produced by verify.mjs; CI has no NDK toolchain.
+  if (JNI_LIBS.some((lib) => !existsSync(lib))) {
+    t.skip('APK build needs the NDK shared objects from `node verify.mjs`');
     return;
   }
   const env = { JAVA_HOME: path.dirname(tools.jdkBin), PATH: `${tools.jdkBin}${path.delimiter}${process.env.PATH || ''}` };
