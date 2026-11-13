@@ -269,7 +269,7 @@ r = run('zip stored entries', [
 ], { cwd: tree });
 check(r.ok, 'zip stored entries', r);
 r = run('zip remaining entries', [
-  'zip', '-q', '-r', unsigned, 'classes.dex', 'assets', 'lib',
+  'zip', '-q', '-r', unsigned, 'classes.dex', 'assets', 'lib', 'res',
 ], { cwd: tree });
 check(r.ok, 'zip remaining entries', r);
 
