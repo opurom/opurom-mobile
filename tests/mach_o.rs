@@ -5,7 +5,10 @@
 //! standard-library Rust only, so the same evidence is available on a host
 //! without those tools. Synthetic in-memory images exercise the reader on
 //! every host; the built archive is checked when the iOS build has produced it.
+//! The archive also carries the C ABI symbol names the Swift wrapper binds to,
+//! read straight from each object's `LC_SYMTAB`.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -499,4 +502,282 @@ fn archive_path() -> PathBuf {
         .join("aarch64-apple-ios")
         .join("release")
         .join("libopurom_mobile.a")
+}
+
+/// The C ABI symbols the Swift wrapper binds to. Mach-O prefixes C symbols with
+/// a leading underscore, so the nlist names are the underscore-qualified forms.
+const EXPECTED_DEFINED: [&str; 8] = [
+    "_opu_state_new",
+    "_opu_dispatch",
+    "_opu_frame",
+    "_opu_state_free",
+    "_opu_renderer_new",
+    "_opu_renderer_frame",
+    "_opu_renderer_free",
+    "_opu_frame_from_ir",
+];
+
+const LC_SYMTAB: u32 = 0x02;
+const NLIST64_SIZE: usize = 16;
+/// Mask for the type bits folded into `n_type`.
+const N_TYPE: u8 = 0x0e;
+/// Undefined symbol type; the symbol is an import, not a definition.
+const N_UNDF: u8 = 0x00;
+/// Local scope bit; local symbols are not exported entry points.
+const N_LOCAL: u8 = 0x80;
+
+/// Read one object member's `LC_SYMTAB` and return the names of its defined
+/// global symbols, the set `nm` prints for a Mach-O object. The type and scope
+/// bits share the `n_type` field, so a name counts as defined only when its
+/// type is not undefined and its scope is not local.
+fn defined_symbols(data: &[u8]) -> Result<BTreeSet<String>, &'static str> {
+    ios_object(data)?;
+    let command_count = u32_at(data, 16)? as usize;
+    let commands_size = u32_at(data, 20)? as usize;
+    let region_end = HEADER_SIZE
+        .checked_add(commands_size)
+        .ok_or("load command region overflow")?;
+    if region_end > data.len() {
+        return Err("load command region extends past the member end");
+    }
+    let mut found = false;
+    let mut nsyms = 0u32;
+    let mut symoff = 0usize;
+    let mut stroff = 0usize;
+    let mut strsize = 0usize;
+    let mut offset = HEADER_SIZE;
+    for _ in 0..command_count {
+        let command = u32_at(data, offset)?;
+        let command_size = u32_at(data, offset + 4)? as usize;
+        if command_size < 8 || command_size % 8 != 0 {
+            return Err("load command size is not a multiple of 8");
+        }
+        let next = offset
+            .checked_add(command_size)
+            .ok_or("load command range overflow")?;
+        if next > region_end {
+            return Err("load commands extend past the declared size");
+        }
+        if command == LC_SYMTAB {
+            if command_size < 8 + 16 {
+                return Err("LC_SYMTAB command is shorter than 24 bytes");
+            }
+            symoff = usize::try_from(u32_at(data, offset + 8)?)
+                .map_err(|_| "symbol table offset does not fit the host")?;
+            nsyms = u32_at(data, offset + 12)?;
+            stroff = usize::try_from(u32_at(data, offset + 16)?)
+                .map_err(|_| "string table offset does not fit the host")?;
+            strsize = usize::try_from(u32_at(data, offset + 20)?)
+                .map_err(|_| "string table size does not fit the host")?;
+            found = true;
+        }
+        offset = next;
+    }
+    if !found {
+        return Err("Mach-O object has no LC_SYMTAB load command");
+    }
+    let entries = usize::try_from(nsyms)
+        .map_err(|_| "symbol table count does not fit the host")?
+        .checked_mul(NLIST64_SIZE)
+        .ok_or("symbol table range overflow")?;
+    let symbols = data
+        .get(
+            symoff
+                ..symoff
+                    .checked_add(entries)
+                    .ok_or("symbol table range overflow")?,
+        )
+        .ok_or("symbol table extends past the member end")?;
+    let strings = data
+        .get(
+            stroff
+                ..stroff
+                    .checked_add(strsize)
+                    .ok_or("string table range overflow")?,
+        )
+        .ok_or("symbol string table extends past the member end")?;
+    let mut defined = BTreeSet::new();
+    for entry in symbols.chunks_exact(NLIST64_SIZE) {
+        let n_type = entry[4];
+        if (n_type & N_TYPE) == N_UNDF || (n_type & N_LOCAL) != 0 {
+            continue;
+        }
+        let name_offset = usize::try_from(u32_at(entry, 0)?)
+            .map_err(|_| "symbol name offset does not fit the host")?;
+        let tail = strings
+            .get(name_offset..)
+            .ok_or("symbol name offset is out of range")?;
+        let end = tail
+            .iter()
+            .position(|&byte| byte == 0)
+            .ok_or("symbol name is not NUL-terminated")?;
+        let name = std::str::from_utf8(&tail[..end]).map_err(|_| "symbol name is not UTF-8")?;
+        if !name.is_empty() {
+            defined.insert(name.to_owned());
+        }
+    }
+    Ok(defined)
+}
+
+/// One `LC_SYMTAB` load command: the fixed pair plus its four payload fields,
+/// written in the on-disk `symoff`, `nsyms`, `stroff`, `strsize` order.
+fn symtab_command(symoff: u32, nsyms: u32, stroff: u32, strsize: u32) -> Vec<u8> {
+    let payload = [symoff, nsyms, stroff, strsize]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect::<Vec<u8>>();
+    load_command(LC_SYMTAB, &payload)
+}
+
+/// Builds a synthetic object with a symbol table, a string table and symbol
+/// entries, so the reader runs without build output. Each entry is an
+/// `(name, n_type)` pair; undefined and local entries must not be reported.
+fn synthetic_object_with_symbols(entries: &[(&str, u8)]) -> Vec<u8> {
+    let mut strings = vec![0u8];
+    let mut name_offsets = Vec::with_capacity(entries.len());
+    for (name, _) in entries {
+        name_offsets.push(strings.len() as u32);
+        strings.extend_from_slice(name.as_bytes());
+        strings.push(0);
+    }
+    let segment = segment_64_command();
+    let version = version_min_command(LC_VERSION_MIN_IPHONEOS);
+    let symtab = {
+        let command_end = HEADER_SIZE + segment.len() + version.len() + 24;
+        let symoff = command_end as u32;
+        let stroff = symoff + entries.len() as u32 * NLIST64_SIZE as u32;
+        symtab_command(symoff, entries.len() as u32, stroff, strings.len() as u32)
+    };
+    let command_end = HEADER_SIZE + segment.len() + version.len() + symtab.len();
+    let mut bytes = synthetic_object(&[&segment, &version, &symtab]);
+    bytes.resize(
+        command_end + entries.len() * NLIST64_SIZE + strings.len(),
+        0,
+    );
+    for (index, (_, n_type)) in entries.iter().enumerate() {
+        let base = command_end + index * NLIST64_SIZE;
+        put_u32(&mut bytes, base, name_offsets[index]);
+        bytes[base + 4] = *n_type;
+    }
+    bytes[command_end + entries.len() * NLIST64_SIZE..].copy_from_slice(&strings);
+    bytes
+}
+
+fn with_byte(bytes: &[u8], offset: usize, value: u8) -> Vec<u8> {
+    let mut copy = bytes.to_vec();
+    copy[offset] = value;
+    copy
+}
+
+#[test]
+fn synthetic_mach_o_objects_expose_defined_global_symbols() {
+    // 0x2e is a defined global section symbol, 0x20 an undefined global import,
+    // 0x8e a local section symbol and 0x02 a defined absolute symbol.
+    let bytes = synthetic_object_with_symbols(&[
+        ("_opu_state_new", 0x2e),
+        ("_opu_dispatch", 0x2e),
+        ("_opu_state_free", 0x20),
+        ("_local_helper", 0x8e),
+        ("_abs_value", 0x02),
+    ]);
+    let defined = defined_symbols(&bytes).expect("synthetic symbol table is valid");
+    let expected: BTreeSet<String> = ["_opu_state_new", "_opu_dispatch", "_abs_value"]
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    assert_eq!(defined, expected);
+
+    let archive = synthetic_archive(&[("member.o", &bytes)]);
+    let mut union = BTreeSet::new();
+    for member in object_members(&archive).expect("synthetic archive is valid") {
+        for name in defined_symbols(&member.data).expect("member symbol table is valid") {
+            union.insert(name);
+        }
+    }
+    assert_eq!(union, expected);
+}
+
+#[test]
+fn malformed_mach_o_symbol_tables_are_rejected_with_a_reason() {
+    let bytes = synthetic_object_with_symbols(&[("_opu_state_new", 0x2e)]);
+    let segment = segment_64_command();
+    let version = version_min_command(LC_VERSION_MIN_IPHONEOS);
+    let symtab_offset = HEADER_SIZE + segment.len() + version.len();
+    let symbol_offset = symtab_offset + 24;
+    let cases: Vec<(&str, Vec<u8>, &str)> = vec![
+        (
+            "no symbol command",
+            valid_object(),
+            "Mach-O object has no LC_SYMTAB load command",
+        ),
+        (
+            "symbol count",
+            with_u32(&bytes, symtab_offset + 12, u32::MAX),
+            "symbol table extends past the member end",
+        ),
+        (
+            "symbol offset",
+            with_u32(&bytes, symtab_offset + 8, u32::MAX),
+            "symbol table extends past the member end",
+        ),
+        (
+            "string offset",
+            with_u32(&bytes, symtab_offset + 16, u32::MAX),
+            "symbol string table extends past the member end",
+        ),
+        (
+            "string size",
+            with_u32(&bytes, symtab_offset + 20, u32::MAX),
+            "symbol string table extends past the member end",
+        ),
+        (
+            "name offset",
+            with_u32(&bytes, symbol_offset, u32::MAX),
+            "symbol name offset is out of range",
+        ),
+        (
+            "name terminator",
+            with_byte(&bytes, symbol_offset + NLIST64_SIZE + 15, b'x'),
+            "symbol name is not NUL-terminated",
+        ),
+    ];
+    for (label, image, reason) in cases {
+        assert_eq!(defined_symbols(&image).unwrap_err(), reason, "case {label}");
+    }
+}
+
+#[test]
+fn ios_staticlib_defines_the_c_abi_symbols() {
+    let path = archive_path();
+    if !path.exists() {
+        eprintln!(
+            "SKIP: {} does not exist; run `node verify.mjs` on a macOS host first.",
+            path.display()
+        );
+        return;
+    }
+    let bytes = fs::read(&path).expect("static archive is readable");
+    let members =
+        object_members(&bytes).unwrap_or_else(|reason| panic!("{}: {reason}", path.display()));
+    let mut defined = BTreeSet::new();
+    for member in &members {
+        for name in defined_symbols(&member.data)
+            .unwrap_or_else(|reason| panic!("{} ({}): {reason}", path.display(), member.name))
+        {
+            defined.insert(name);
+        }
+    }
+    for name in EXPECTED_DEFINED {
+        assert!(
+            defined.contains(name),
+            "{} does not define {name}",
+            path.display()
+        );
+    }
+    eprintln!(
+        "checked {} defined symbols across {} members in {}",
+        defined.len(),
+        members.len(),
+        path.display()
+    );
 }
