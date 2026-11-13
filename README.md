@@ -14,8 +14,9 @@ as a small deterministic state machine plus an additive IR path that draws real 
 - a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
   the compiled Todo IR from its assets and renders real frames through JNI into an `ImageView`.
 
-On-host verification covers compilation, ELF provenance, dynamic symbol exports, resource
-packaging and the full APK build; on-device execution and store distribution are packaged targets
+On-host verification covers compilation, ELF provenance, dynamic symbol exports, Mach-O64
+provenance for the iOS archive, resource packaging and the full APK build; on-device
+execution and store distribution are packaged targets
 for hosts with an Android system image.
 
 ## Build and verify
@@ -60,9 +61,9 @@ x86_64-linux-android`.
 
 | Check | Actual result |
 | --- | --- |
-| `cargo test --offline` (host) | `16 passed; 0 failed; 0 ignored` |
+| `cargo test --offline` (host) | `20 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
-| `node --test` (host) | `7 passed; 0 failed; 0 skipped`; ABI fixtures and asset integrity |
+| `node --test` (host) | `11 passed; 0 failed; 0 skipped`; ABI fixtures, asset integrity and APK signing determinism |
 | `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
@@ -169,6 +170,24 @@ the eight plain C ABI functions named in `verify.mjs`. Synthetic ELF64 images ex
 and its rejection of malformed headers on hosts without build output; the real shared objects are
 checked when `verify.mjs` has produced them. The reader uses no NDK readelf binary and no external
 crate. `node verify.mjs` runs this test as one of its cargo steps.
+
+### Mach-O64 verification in pure Rust
+
+`tests/mach_o.rs` reads the `aarch64-apple-ios` static library archive and parses every
+object member with standard-library Rust, so the same evidence that `file`/`lipo`/`otool`
+provide is available without those tools. The archive walk understands the BSD member
+format (`!<arch>` global header, 60-byte member records, `#1/<len>` extended names) and
+skips symbol-index and string-table members. Every remaining member must be a Mach-O64
+object: `MH_MAGIC_64` in little-endian byte order, `CPU_TYPE_ARM64`, file type
+`MH_OBJECT`, and a load-command region whose commands stay inside their declared size
+with 8-byte-aligned command sizes. Each object must carry at least one `LC_SEGMENT_64`
+and an iOS platform command, `LC_VERSION_MIN_IPHONEOS` or `LC_BUILD_VERSION` with the iOS
+platform value; object members carry no `LC_UUID`, which belongs to linked dylibs and
+executables rather than archive members. The platform value separates the iOS build from
+an arm64 macOS build of the same sources. Synthetic in-memory archives and objects
+exercise the reader and its rejection of malformed images on hosts without build output;
+the real archive is checked when the iOS build has produced it. The reader uses no
+external crate.
 
 ### Packaged asset integrity
 
@@ -301,12 +320,13 @@ Plugin from a network repository, so it is not part of the offline `verify.mjs` 
 | --- |
 | Real arm64/x86_64 Android shared objects with ELF magic + machine type evidence |
 | ELF64 class, endianness, type, machine and dynamic symbol exports read from the shared objects |
+| Mach-O64 magic, byte order, cpu type, file type and iOS load commands read from the iOS archive members |
 | Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) |
 | `javac` compile of the JNI declaration, the app sources and the JNI header syntax check |
 | `aapt2` resource compile + manifest/resource link, `d8` dexing |
 | `gradle :app:assembleDebug` producing a real APK with both `.so` files and the IR asset |
 | Swift wrapper typecheck against the C header, including the IR entry points |
-| Rust unit, ELF, real-renderer and Node spec tests |
+| Rust unit, ELF, Mach-O, real-renderer and Node spec tests |
 | Offline, bounded verifier with tool-specific SKIPs |
 | IR C ABI pixels equal the shared software renderer's pixels; malformed IR returns status values |
 | Measured artifact size growth and measured per-frame render time |
