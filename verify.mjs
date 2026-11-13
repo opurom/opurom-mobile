@@ -310,6 +310,20 @@ if (!compiler || !existsSync(TODO_SRC) || !existsSync(TODO_ASSET)) {
 }
 
 // =====================================================================
+// 1d. ELF64 dynamic symbol evidence. This is a Rust test so the check also
+//     runs on hosts without the NDK readelf tools.
+// =====================================================================
+const elfTest = run('cargo test elf_exports', [
+  'cargo', 'test', '--offline', '--test', 'elf_exports',
+], { timeoutMs: 120000 });
+if (elfTest.ok) {
+  const summary = elfTest.stdout.split('\n').find((line) => line.startsWith('test result:')) || '';
+  pass(`ELF64 dynamic symbol checks: ${summary} (${elfTest.ms}ms)`);
+} else {
+  fail('ELF64 dynamic symbol checks failed', `${elfTest.stdout}\n${elfTest.stderr}`);
+}
+
+// =====================================================================
 // 2. Cross-compile the staticlib for aarch64-apple-ios (offline).
 //    The iOS slice needs macOS; on other hosts it is a concrete SKIP.
 // =====================================================================
