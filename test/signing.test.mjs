@@ -226,7 +226,9 @@ function enabledSchemes(output) {
 }
 
 function certificateDigests(output) {
-  return [...output.matchAll(/Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})/g)]
+  // build-tools versions label signers either "Signer #1" or "V3.0 Signer:";
+  // public-key digests deliberately do not match.
+  return [...output.matchAll(/(?:Signer #\d+|v[\d.]+ Signer:) certificate SHA-256 digest: ([0-9a-f]{64})/gi)]
     .map((match) => match[1]);
 }
 
