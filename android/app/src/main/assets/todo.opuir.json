@@ -68,7 +68,7 @@
             "kind": "Text",
             "props": {
               "color": "#FFFFFF",
-              "size": 28,
+              "size": 20,
               "value": "OPUROM Todo"
             }
           },
@@ -79,7 +79,7 @@
             "kind": "Text",
             "props": {
               "color": "#D6E8FF",
-              "size": 13,
+              "size": 11,
               "value": "UI, model and API in one source file"
             }
           }
@@ -90,43 +90,33 @@
         "props": {
           "animate": "ease",
           "gradient": "#097FEB,#043B70",
-          "padding": 26,
-          "radius": 18,
+          "padding": 16,
+          "radius": 16,
           "shadow": 4
         }
       },
       {
         "children": [
           {
-            "children": [
-              {
-                "children": [],
-                "events": {},
-                "id": 6,
-                "kind": "Text",
-                "props": {
-                  "color": "#667085",
-                  "size": 13,
-                  "value": "Remaining"
-                }
-              },
-              {
-                "children": [],
-                "events": {},
-                "id": 7,
-                "kind": "Text",
-                "props": {
-                  "color": "#097FEB",
-                  "size": 38,
-                  "value": "{remaining}"
-                }
-              }
-            ],
+            "children": [],
             "events": {},
             "id": 5,
-            "kind": "Column",
+            "kind": "Text",
             "props": {
-              "gap": 8
+              "color": "#667085",
+              "size": 11,
+              "value": "Remaining"
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 6,
+            "kind": "Text",
+            "props": {
+              "color": "#097FEB",
+              "size": 30,
+              "value": "{remaining}"
             }
           }
         ],
@@ -136,42 +126,53 @@
         "props": {
           "border": "#E4E9F2",
           "color": "#FFFFFF",
-          "padding": 24,
-          "radius": 16,
+          "padding": 14,
+          "radius": 14,
           "shadow": 3
         }
       },
       {
         "children": [
           {
-            "children": [],
-            "events": {
-              "tap": {
-                "op": "add",
-                "target": "remaining",
-                "value": 1
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "add",
+                    "target": "remaining",
+                    "value": 1
+                  }
+                },
+                "id": 9,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.0,
+                  "label": "Refresh",
+                  "padding": 10,
+                  "radius": 10,
+                  "shadow": 2
+                }
               }
-            },
-            "id": 9,
-            "kind": "Button",
+            ],
+            "events": {},
+            "id": 8,
+            "kind": "Row",
             "props": {
-              "animate": "spring",
-              "color": "#097FEB",
-              "fontScale": 1.1,
-              "label": "Refresh",
-              "padding": 14,
-              "radius": 14,
-              "shadow": 2
+              "color": "#F4F7FB",
+              "gap": 10
             }
           }
         ],
         "events": {},
-        "id": 8,
+        "id": 7,
         "kind": "Container",
         "props": {
           "color": "#F4F7FB",
-          "padding": 16,
-          "radius": 16,
+          "padding": 10,
+          "radius": 14,
           "shadow": 3
         }
       }
@@ -180,8 +181,8 @@
     "id": 0,
     "kind": "Column",
     "props": {
-      "gap": 20,
-      "padding": 24
+      "gap": 10,
+      "padding": 14
     }
   }
 }
