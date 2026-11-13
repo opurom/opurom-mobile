@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-dependency verifier for the Opurom mobile workstream (capability iOS + capability Android).
+// Zero-dependency verifier for the Opurom mobile workstream (iOS + Android).
 // Resolves every path from this file, so it runs from any working directory
 // (including the umbrella workspace root). Each child process is bounded by a
 // spawn timeout; nothing is left running after this script exits.
@@ -87,16 +87,57 @@ console.log(`verify root: ${ROOT}`);
 // missing tool becomes a concrete SKIP instead of a fake PASS.
 // =====================================================================
 
+// Local toolchain roots are resolved at runtime, never hardcoded. A sibling
+// `toolchains/` directory next to the repository root is the fallback layout;
+// the directory entries are scanned, so the exact archive folder names on the
+// host do not matter.
+function localToolchainRoots() {
+  const roots = [];
+  const sibling = path.resolve(ROOT, '..', '..', 'toolchains');
+  if (existsSync(sibling)) roots.push(sibling);
+  const parent = path.resolve(ROOT, '..', 'toolchains');
+  if (existsSync(parent) && parent !== sibling) roots.push(parent);
+  return roots;
+}
+
+// Every immediate subdirectory of a toolchain root, so a downloaded archive
+// folder (for example a JDK under `jdk-download/`) is found without naming it.
+function toolchainSubdirectories(root) {
+  if (!existsSync(root)) return [];
+  const found = [];
+  for (const entry of readdirSync(root)) {
+    const full = path.join(root, entry);
+    try {
+      if (statSync(full).isDirectory()) found.push(full);
+    } catch {
+      // A racing removal is not a reason to fail the whole lookup.
+    }
+  }
+  return found;
+}
+
+// JDK 21 layouts: a macOS bundle keeps the tools under Contents/Home/bin, a
+// Linux tarball keeps them directly under bin.
+function javacCandidates(dir) {
+  return [
+    path.join(dir, 'Contents', 'Home', 'bin', 'javac'),
+    path.join(dir, 'bin', 'javac'),
+  ];
+}
+
 function findJavac() {
   const candidates = [];
   if (process.env.Opurom_JAVAC) candidates.push(process.env.Opurom_JAVAC);
   if (process.env.JAVA_HOME) candidates.push(path.join(process.env.JAVA_HOME, 'bin', 'javac'));
-  // Restored Temurin JDK 21 used by this host's capability run (outside the repo).
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'jdk-download',
-    'jdk-21.0.13+9', 'Contents', 'Home', 'bin', 'javac'));
-  // Original declared JDK path, if present on another host layout.
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'jdk-21.0.13+9',
-    'Contents', 'Home', 'bin', 'javac'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      for (const candidate of javacCandidates(dir)) candidates.push(candidate);
+      // One level deeper, for a root that holds download directories.
+      for (const nested of toolchainSubdirectories(dir)) {
+        for (const candidate of javacCandidates(nested)) candidates.push(candidate);
+      }
+    }
+  }
   for (const candidate of candidates) {
     if (candidate && existsSync(candidate)) return candidate;
   }
@@ -113,11 +154,15 @@ function javaFromJavac(javac) {
 // driver itself, so no extra --sysroot flag is needed.
 function findNdk() {
   const candidates = [];
-  if (process.env.Opurom_NDK_HOME) candidates.push(process.env.Opurom_NDK_HOME);
+  if (process.env.OPR_NDK_HOME) candidates.push(process.env.OPR_NDK_HOME);
   if (process.env.ANDROID_NDK_HOME) candidates.push(process.env.ANDROID_NDK_HOME);
   if (process.env.ANDROID_NDK_ROOT) candidates.push(process.env.ANDROID_NDK_ROOT);
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'ndk-download', 'android-ndk-capabilityc'));
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'android-ndk-capabilityc'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      candidates.push(dir);
+      for (const nested of toolchainSubdirectories(dir)) candidates.push(nested);
+    }
+  }
   for (const candidate of candidates) {
     if (!candidate) continue;
     const bin = path.join(candidate, 'toolchains', 'llvm', 'prebuilt',
@@ -131,10 +176,15 @@ function findNdk() {
 
 function findSdk() {
   const candidates = [];
-  if (process.env.Opurom_ANDROID_SDK) candidates.push(process.env.Opurom_ANDROID_SDK);
+  if (process.env.OPR_ANDROID_SDK) candidates.push(process.env.OPR_ANDROID_SDK);
   if (process.env.ANDROID_HOME) candidates.push(process.env.ANDROID_HOME);
   if (process.env.ANDROID_SDK_ROOT) candidates.push(process.env.ANDROID_SDK_ROOT);
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'android-sdk'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      candidates.push(dir);
+      for (const nested of toolchainSubdirectories(dir)) candidates.push(nested);
+    }
+  }
   for (const candidate of candidates) {
     if (!candidate) continue;
     if (existsSync(path.join(candidate, 'platforms'))) return candidate;
@@ -181,7 +231,86 @@ if (testRun.ok) {
 }
 
 // =====================================================================
-// 2. capability: cross-compile the staticlib for aarch64-apple-ios (offline).
+// 1b. Real-renderer C ABI tests and the measured per-frame render time.
+// =====================================================================
+const renderTest = run('cargo test real_render', [
+  'cargo', 'test', '--offline', '--test', 'real_render', '--', '--nocapture',
+], { timeoutMs: 180000 });
+if (renderTest.ok) {
+  const summary = renderTest.stdout.split('\n').find((line) => line.startsWith('test result:')) || '';
+  const measured = renderTest.stdout.match(/MEASURED[^\n]*/);
+  if (!measured) {
+    fail('real IR tests did not report a measured per-frame time', renderTest.stdout);
+  } else {
+    pass(`real IR C ABI: ${summary}`);
+    pass(measured[0]);
+  }
+} else {
+  fail('real IR C ABI tests failed', `${renderTest.stdout}\n${renderTest.stderr}`);
+}
+
+// =====================================================================
+// 1c. Compile the Todo example with opuromc and prove the shipped Android
+//     asset is exactly that compiled IR. Missing tools produce a concrete
+//     SKIP; the comparison is byte-for-byte, never a fake PASS.
+// =====================================================================
+const LANG_ROOT = path.resolve(ROOT, '..', 'opurom-lang');
+const TODO_SRC = path.resolve(ROOT, '..', 'opurom-examples', 'todo.opu');
+const TODO_ASSET = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets', 'todo.opuir.json');
+const TODO_COMPILED = path.join(WORK, 'todo.opuir.json');
+
+function findOpuromc() {
+  const candidates = [];
+  if (process.env.OpuromC) candidates.push(process.env.OpuromC);
+  for (const profile of ['release', 'debug']) {
+    candidates.push(path.join(LANG_ROOT, 'target', profile, 'opuromc'));
+  }
+  return candidates.find((candidate) => existsSync(candidate)) || null;
+}
+
+let compiler = findOpuromc();
+if (!compiler && existsSync(path.join(LANG_ROOT, 'Cargo.toml'))) {
+  const compilerBuild = run('cargo build opuromc', [
+    'cargo', 'build', '--offline', '--manifest-path', path.join(LANG_ROOT, 'Cargo.toml'),
+  ], { timeoutMs: 300000, cwd: LANG_ROOT });
+  if (!compilerBuild.ok) {
+    console.error(`note: offline opuromc build failed: ${firstLine(compilerBuild.stderr)}`);
+  }
+  compiler = findOpuromc();
+}
+
+if (!compiler || !existsSync(TODO_SRC) || !existsSync(TODO_ASSET)) {
+  skip('Todo IR compilation needs ../opurom-examples/todo.opu, the shipped IR asset and opuromc at ../opurom-lang/target/{debug,release}/opuromc.');
+} else {
+  const compiledRun = run('opuromc compile todo.opu', [
+    compiler, 'compile', TODO_SRC, '-o', TODO_COMPILED,
+  ], { timeoutMs: 120000 });
+  if (!compiledRun.ok) {
+    fail('opuromc compile of the Todo example failed',
+      `${compiledRun.stdout}\n${compiledRun.stderr}`);
+  } else {
+    const compiled = readFileSync(TODO_COMPILED, 'utf8');
+    const shipped = readFileSync(TODO_ASSET, 'utf8');
+    let parsed;
+    try {
+      parsed = JSON.parse(compiled);
+    } catch (error) {
+      fail('compiled Todo IR is not JSON', String(error));
+    }
+    if (parsed && compiled === shipped && parsed.ir === '0.1.0' &&
+        parsed.app === 'TodoApp' &&
+        Array.isArray(parsed.state) && parsed.state.some((s) => s.name === 'remaining') &&
+        parsed.tree && parsed.tree.kind === 'Column') {
+      pass(`opuromc compiled Todo IR matches the shipped Android asset (${compiled.length} bytes, ir ${parsed.ir}, app ${parsed.app})`);
+    } else {
+      fail('shipped Android IR asset differs from a fresh opuromc compilation',
+        `compiled ${compiled.length} bytes, shipped ${shipped.length} bytes`);
+    }
+  }
+}
+
+// =====================================================================
+// 2. Cross-compile the staticlib for aarch64-apple-ios (offline).
 //    The iOS slice needs macOS; on other hosts it is a concrete SKIP.
 // =====================================================================
 if (process.platform !== 'darwin') {
@@ -258,7 +387,7 @@ if (process.platform !== 'darwin') {
 }
 
 // =====================================================================
-// 3. capability: Android native library for aarch64 and x86_64.
+// 3. Android native library for aarch64 and x86_64.
 //    The Rust static library is cross-compiled with cargo and linked into
 //    real ELF shared objects with the NDK clang.
 // =====================================================================
@@ -290,7 +419,7 @@ const ndkReadobj = ndkBin ? path.join(ndkBin, 'llvm-readobj') : null;
 const jniLibsDir = path.join(ANDROID_OUT, 'jniLibs');
 
 if (!ndk) {
-  skip('Android NDK not found (set Opurom_NDK_HOME or ANDROID_NDK_HOME; looked for ' +
+  skip('Android NDK not found (set OPR_NDK_HOME or ANDROID_NDK_HOME; looked for ' +
     'toolchains/llvm/prebuilt/*/bin/aarch64-linux-android24-clang): no Android .so is built.');
 } else {
   console.log(`ndk root: ${ndk.root}`);
@@ -403,10 +532,19 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuDispatch',
       'Java_org_opurom_mobile_OpuromNative_opuFrame',
       'Java_org_opurom_mobile_OpuromNative_opuStateFree',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererNew',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererFrame',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererFree',
+      'Java_org_opurom_mobile_OpuromNative_opuFrameFromIr',
     ];
-    const missing = jniSymbols.filter((symbol) => !dynsyms.stdout.includes(symbol));
+    const abiSymbols = [
+      'opu_state_new', 'opu_dispatch', 'opu_frame', 'opu_state_free',
+      'opu_frame_from_ir', 'opu_renderer_new', 'opu_renderer_frame', 'opu_renderer_free',
+    ];
+    const missing = [...jniSymbols, ...abiSymbols]
+      .filter((symbol) => !dynsyms.stdout.includes(symbol));
     if (missing.length === 0) {
-      pass(`${abi} exports all 4 JNI entry points and the 4 C ABI symbols`);
+      pass(`${abi} exports all ${jniSymbols.length} JNI entry points and all ${abiSymbols.length} C ABI symbols`);
     } else {
       fail(`${abi} shared object is missing exported symbols: ${missing.join(', ')}`,
         dynsyms.stdout);
@@ -522,16 +660,27 @@ if (!buildTools) {
       skip('aapt2 link skipped: android.jar not found (no platforms/android-*/android.jar ' +
         `under ${sdk || 'the Android SDK'}).`);
     } else {
+      const assetsDir = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets');
       const linkRun = run('aapt2 link', [
         aapt2, 'link', '-o', path.join(aapt2Work, 'linked', 'app.apk'),
         '-I', platform.jar,
+        '-A', assetsDir,
         '--manifest', path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
         path.join(aapt2Work, 'compiled', 'res.zip'),
       ], { timeoutMs: 120000 });
       const apk = path.join(aapt2Work, 'linked', 'app.apk');
       if (linkRun.ok && existsSync(apk)) {
-        pass(`aapt2 link OK: AndroidManifest.xml + resources -> ${apk} ` +
+        pass(`aapt2 link OK: AndroidManifest.xml + resources + Todo IR asset -> ${apk} ` +
           `(${statSync(apk).size} bytes, ${linkRun.ms}ms)`);
+        const listing = run('unzip -l', ['unzip', '-l', apk], { timeoutMs: 30000 });
+        if (/ENOENT|not found/i.test(listing.stderr)) {
+          skip('unzip(1) is unavailable: APK asset listing not checked (aapt2 link succeeded).');
+        } else if (listing.ok && listing.stdout.includes('assets/todo.opuir.json')) {
+          pass('aapt2 APK contains the compiled Todo IR asset');
+        } else {
+          fail('aapt2 APK is missing the compiled Todo IR asset',
+            listing.stdout || listing.stderr);
+        }
       } else {
         fail('aapt2 link failed', `${linkRun.stdout}\n${linkRun.stderr}`);
       }
@@ -566,7 +715,7 @@ if (!d8Jar || !existsSync(d8Jar)) {
 }
 
 // =====================================================================
-// 6. capability honest scope: the emulator/device run never happens here.
+// 6. The emulator/device run never happens here.
 // =====================================================================
 skip('no emulator or device execution: no Android system image is installed on this host, ' +
   'so the Activity is compiled and packaged but never run.');

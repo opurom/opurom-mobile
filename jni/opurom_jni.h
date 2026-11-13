@@ -40,6 +40,32 @@ JNIEXPORT void JNICALL Java_org_opurom_mobile_OpuromNative_opuStateFree(JNIEnv *
                                                                         jclass clazz,
                                                                         jlong state);
 
+JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererNew(JNIEnv *env,
+                                                                            jclass clazz,
+                                                                            jint width,
+                                                                            jint height);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrame(JNIEnv *env,
+                                                                             jclass clazz,
+                                                                             jlong renderer,
+                                                                             jbyteArray ir,
+                                                                             jbyteArray state,
+                                                                             jbyteArray out,
+                                                                             jint width,
+                                                                             jint height);
+
+JNIEXPORT void JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFree(JNIEnv *env,
+                                                                            jclass clazz,
+                                                                            jlong renderer);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIr(JNIEnv *env,
+                                                                           jclass clazz,
+                                                                           jbyteArray ir,
+                                                                           jbyteArray state,
+                                                                           jbyteArray out,
+                                                                           jint width,
+                                                                           jint height);
+
 #ifdef __cplusplus
 }
 #endif
