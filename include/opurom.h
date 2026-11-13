@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /*
- * OPUROM Platform Adapter ABI v0.1, mobile R6 slice.
+ * OPUROM Platform Adapter ABI v0.1, mobile slice.
  *
  * Ownership: opu_state_new returns one caller-owned opaque state whose integer counter starts at
  * zero. Pass it to opu_state_free exactly once. A null state pointer is rejected by the

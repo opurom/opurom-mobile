@@ -1,4 +1,4 @@
-//! Pure-std Rust C ABI for the R6 arm64 iOS static library.
+//! Pure-std Rust C ABI for the arm64 iOS static library.
 //!
 //! Ownership: `opu_state_new` allocates one opaque state whose counter starts at zero. The caller
 //! owns that pointer and must pass it to `opu_state_free` exactly once. A null state pointer is

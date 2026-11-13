@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-dependency verifier for the OPUROM mobile workstream (R6 iOS + R7 Android).
+// Zero-dependency verifier for the OPUROM mobile workstream (iOS + Android).
 // Resolves every path from this file, so it runs from any working directory
 // (including the umbrella workspace root). Each child process is bounded by a
 // spawn timeout; nothing is left running after this script exits.
@@ -87,16 +87,57 @@ console.log(`verify root: ${ROOT}`);
 // missing tool becomes a concrete SKIP instead of a fake PASS.
 // =====================================================================
 
+// Local toolchain roots are resolved at runtime, never hardcoded. A sibling
+// `toolchains/` directory next to the repository root is the fallback layout;
+// the directory entries are scanned, so the exact archive folder names on the
+// host do not matter.
+function localToolchainRoots() {
+  const roots = [];
+  const sibling = path.resolve(ROOT, '..', '..', 'toolchains');
+  if (existsSync(sibling)) roots.push(sibling);
+  const parent = path.resolve(ROOT, '..', 'toolchains');
+  if (existsSync(parent) && parent !== sibling) roots.push(parent);
+  return roots;
+}
+
+// Every immediate subdirectory of a toolchain root, so a downloaded archive
+// folder (for example a JDK under `jdk-download/`) is found without naming it.
+function toolchainSubdirectories(root) {
+  if (!existsSync(root)) return [];
+  const found = [];
+  for (const entry of readdirSync(root)) {
+    const full = path.join(root, entry);
+    try {
+      if (statSync(full).isDirectory()) found.push(full);
+    } catch {
+      // A racing removal is not a reason to fail the whole lookup.
+    }
+  }
+  return found;
+}
+
+// JDK 21 layouts: a macOS bundle keeps the tools under Contents/Home/bin, a
+// Linux tarball keeps them directly under bin.
+function javacCandidates(dir) {
+  return [
+    path.join(dir, 'Contents', 'Home', 'bin', 'javac'),
+    path.join(dir, 'bin', 'javac'),
+  ];
+}
+
 function findJavac() {
   const candidates = [];
   if (process.env.OPUROM_JAVAC) candidates.push(process.env.OPUROM_JAVAC);
   if (process.env.JAVA_HOME) candidates.push(path.join(process.env.JAVA_HOME, 'bin', 'javac'));
-  // Restored Temurin JDK 21 used by this host's R6 run (outside the repo).
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'jdk-download',
-    'jdk-21.0.13+9', 'Contents', 'Home', 'bin', 'javac'));
-  // Original declared JDK path, if present on another host layout.
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'jdk-21.0.13+9',
-    'Contents', 'Home', 'bin', 'javac'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      for (const candidate of javacCandidates(dir)) candidates.push(candidate);
+      // One level deeper, for a root that holds download directories.
+      for (const nested of toolchainSubdirectories(dir)) {
+        for (const candidate of javacCandidates(nested)) candidates.push(candidate);
+      }
+    }
+  }
   for (const candidate of candidates) {
     if (candidate && existsSync(candidate)) return candidate;
   }
@@ -113,11 +154,15 @@ function javaFromJavac(javac) {
 // driver itself, so no extra --sysroot flag is needed.
 function findNdk() {
   const candidates = [];
-  if (process.env.OPUROM_NDK_HOME) candidates.push(process.env.OPUROM_NDK_HOME);
+  if (process.env.OPR_NDK_HOME) candidates.push(process.env.OPR_NDK_HOME);
   if (process.env.ANDROID_NDK_HOME) candidates.push(process.env.ANDROID_NDK_HOME);
   if (process.env.ANDROID_NDK_ROOT) candidates.push(process.env.ANDROID_NDK_ROOT);
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'ndk-download', 'android-ndk-r27c'));
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'android-ndk-r27c'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      candidates.push(dir);
+      for (const nested of toolchainSubdirectories(dir)) candidates.push(nested);
+    }
+  }
   for (const candidate of candidates) {
     if (!candidate) continue;
     const bin = path.join(candidate, 'toolchains', 'llvm', 'prebuilt',
@@ -131,10 +176,15 @@ function findNdk() {
 
 function findSdk() {
   const candidates = [];
-  if (process.env.OPUROM_ANDROID_SDK) candidates.push(process.env.OPUROM_ANDROID_SDK);
+  if (process.env.OPR_ANDROID_SDK) candidates.push(process.env.OPR_ANDROID_SDK);
   if (process.env.ANDROID_HOME) candidates.push(process.env.ANDROID_HOME);
   if (process.env.ANDROID_SDK_ROOT) candidates.push(process.env.ANDROID_SDK_ROOT);
-  candidates.push(path.join(ROOT, '..', '..', 'toolchains', 'android-sdk'));
+  for (const root of localToolchainRoots()) {
+    for (const dir of toolchainSubdirectories(root)) {
+      candidates.push(dir);
+      for (const nested of toolchainSubdirectories(dir)) candidates.push(nested);
+    }
+  }
   for (const candidate of candidates) {
     if (!candidate) continue;
     if (existsSync(path.join(candidate, 'platforms'))) return candidate;
@@ -181,7 +231,7 @@ if (testRun.ok) {
 }
 
 // =====================================================================
-// 2. R6: cross-compile the staticlib for aarch64-apple-ios (offline).
+// 2. Cross-compile the staticlib for aarch64-apple-ios (offline).
 //    The iOS slice needs macOS; on other hosts it is a concrete SKIP.
 // =====================================================================
 if (process.platform !== 'darwin') {
@@ -258,7 +308,7 @@ if (process.platform !== 'darwin') {
 }
 
 // =====================================================================
-// 3. R7: Android native library for aarch64 and x86_64.
+// 3. Android native library for aarch64 and x86_64.
 //    The Rust static library is cross-compiled with cargo and linked into
 //    real ELF shared objects with the NDK clang.
 // =====================================================================
@@ -290,7 +340,7 @@ const ndkReadobj = ndkBin ? path.join(ndkBin, 'llvm-readobj') : null;
 const jniLibsDir = path.join(ANDROID_OUT, 'jniLibs');
 
 if (!ndk) {
-  skip('Android NDK not found (set OPUROM_NDK_HOME or ANDROID_NDK_HOME; looked for ' +
+  skip('Android NDK not found (set OPR_NDK_HOME or ANDROID_NDK_HOME; looked for ' +
     'toolchains/llvm/prebuilt/*/bin/aarch64-linux-android24-clang): no Android .so is built.');
 } else {
   console.log(`ndk root: ${ndk.root}`);
@@ -566,7 +616,7 @@ if (!d8Jar || !existsSync(d8Jar)) {
 }
 
 // =====================================================================
-// 6. R7 honest scope: the emulator/device run never happens here.
+// 6. The emulator/device run never happens here.
 // =====================================================================
 skip('no emulator or device execution: no Android system image is installed on this host, ' +
   'so the Activity is compiled and packaged but never run.');

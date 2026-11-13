@@ -1,4 +1,4 @@
-//! ELF evidence for the R7 Android shared objects.
+//! ELF evidence for the Android shared objects.
 //!
 //! The shared objects are build output, so this test only asserts anything when
 //! `verify.mjs` has produced them on this host. Without the NDK (or before the

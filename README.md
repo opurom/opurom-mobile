@@ -1,7 +1,7 @@
 # opurom-mobile
 
-Round 6 **mobile native artifacts** slice of OPUROM (`R6_ADDENDUM.md`, section 3) plus the Round 7
-**Android native library and app module** slice (`R7_ADDENDUM.md`, section 3). One independent
+**Mobile native artifacts** slice of OPUROM ([PLATFORM_DELIVERY.md](../opurom-spec/PLATFORM_DELIVERY.md), section 3) plus the
+**Android native library and app module** slice ([NATIVE_NETWORK.md](../opurom-spec/NATIVE_NETWORK.md), section 3). One independent
 local git repo, one pure-std Rust crate, no external crates, no network at build time. It
 implements the C ABI of the [Platform Adapter contract](../opurom-spec/ADAPTER_CONTRACT.md) as a
 small deterministic state machine and proves these compile-level deliverables:
@@ -9,9 +9,9 @@ small deterministic state machine and proves these compile-level deliverables:
 - a real `aarch64-apple-ios` static library with `file`/`lipo`/`otool` evidence;
 - a Swift wrapper typechecked against the C header via a module map;
 - a JNI declaration compiled with `javac`;
-- **R7:** real ELF Android shared objects for `aarch64-linux-android` and `x86_64-linux-android`,
+- real ELF Android shared objects for `aarch64-linux-android` and `x86_64-linux-android`,
   built with the Android NDK clang, with ELF magic bytes and machine type proven;
-- **R7:** a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
+- a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
   the library through the JNI layer and renders a frame into an `ImageView`.
 
 **No app runs.** There is no emulator or device execution, no AAB signing and no Play Store
@@ -21,28 +21,34 @@ submission anywhere in this repository.
 
 ```sh
 export PATH="$HOME/.cargo/bin:$PATH"
-cd /Users/mac/work/opurom/opurom-mobile
+cd opurom-mobile
 cargo test --offline --lib                    # Rust unit tests, host target
-node verify.mjs                               # full R6 + R7 verification (runs from any cwd)
+node verify.mjs                               # full verification (runs from any cwd)
 npm test                                      # Node-side ABI spec test
 ```
 
 `verify.mjs` is zero-dependency Node and resolves all paths from its own file, so
-`node /path/to/opurom-mobile/verify.mjs` works from the umbrella workspace root. Every child
+`node <path-to>/opurom-mobile/verify.mjs` works from the umbrella workspace root. Every child
 process has a hard spawn timeout. On a host that lacks a tool the verifier prints a concrete
 `SKIP` naming the exact missing tool and exits 0; there is no fake PASS anywhere in it.
 
 ### Toolchain discovery
 
-The verifier finds its tools without hardcoding one host layout:
+The verifier finds its tools through environment variables and a runtime-resolved
+local `toolchains/` directory. No absolute path is compiled into the tool.
 
-| Tool | Looked up in |
-| --- | --- |
-| `cargo`, `rustc` | `PATH` (plus `~/.cargo/bin` prepended) |
-| `javac` | `OPUROM_JAVAC`, `JAVA_HOME`, `../../toolchains/jdk-download/jdk-21.0.13+9` |
-| Android NDK | `OPUROM_NDK_HOME`, `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, `../../toolchains/ndk-download/android-ndk-r27c` |
-| Android SDK | `OPUROM_ANDROID_SDK`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `../../toolchains/android-sdk` |
-| `aapt2`, `d8` | newest `build-tools/*/` of the SDK that actually contains them |
+| Tool | Required version | Looked up in |
+| --- | --- | --- |
+| `cargo`, `rustc` | any recent stable | `PATH` (plus `~/.cargo/bin` prepended) |
+| `javac` | JDK 21 | `OPUROM_JAVAC`, `JAVA_HOME`, then a sibling `toolchains/` JDK 21 |
+| Android NDK | NDK r27c | `OPR_NDK_HOME`, `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, then a sibling `toolchains/` NDK r27c |
+| Android SDK | platform 34 | `OPR_ANDROID_SDK`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, then a sibling `toolchains/` SDK |
+| `aapt2`, `d8` | build-tools 34 | newest `build-tools/*/` of the SDK that actually contains them |
+
+The local `toolchains/` fallback is resolved at runtime relative to the
+repository root, and the directory entries are scanned rather than named, so the
+layout on the host does not have to match a fixed path. Set the environment
+variables above to point the verifier at a specific installation.
 
 The Android Rust targets must be installed: `rustup target add aarch64-linux-android
 x86_64-linux-android`.
@@ -194,20 +200,20 @@ The APK is debug-signed with the local debug key. The Gradle build needs the And
 Plugin from a network repository, so it is not part of the offline `verify.mjs` run; the
 `aapt2`/`d8`/`javac` steps above are the offline equivalent.
 
-## Honest scope
+## Verified here
 
-| Verified in R7 here | Not implemented (R8+) |
-| --- | --- |
-| Real arm64/x86_64 Android shared objects with ELF magic + machine type evidence | No emulator or device execution (no system image is installed) |
-| Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) | No AAB signing, no Play Store submission |
-| `javac` compile of the JNI declaration, the app sources and the JNI header syntax check | No HarmonyOS toolchain or artifacts |
-| `aapt2` resource compile + manifest/resource link, `d8` dexing | No signed release APK, no AAB, no Play Store submission |
-| `gradle :app:assembleDebug` producing a real APK with both `.so` files | No app execution (the APK is never installed or launched) |
-| Swift wrapper typecheck against the C header | No iOS simulator or device execution (no simulator runtime installed) |
-| Pure-std Rust state machine with unit + ELF + Node spec tests | No renderer/GPU integration, no fps or size benchmarks |
-| Offline, bounded verifier with honest tool-specific SKIPs | No R8+ security, no Play Integrity, no app store metadata |
+| Verified in this repository |
+| --- |
+| Real arm64/x86_64 Android shared objects with ELF magic + machine type evidence |
+| Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) |
+| `javac` compile of the JNI declaration, the app sources and the JNI header syntax check |
+| `aapt2` resource compile + manifest/resource link, `d8` dexing |
+| `gradle :app:assembleDebug` producing a real APK with both `.so` files |
+| Swift wrapper typecheck against the C header |
+| Pure-std Rust state machine with unit + ELF + Node spec tests |
+| Offline, bounded verifier with tool-specific SKIPs |
 
-Gaps: the state machine is intentionally tiny (counter + tap), not an IR runtime; `opurom-core`
-owns the full kernel. The Android shared objects are linked and packaged but never `dlopen`'d on
-a device. The Gradle build needs the Android Gradle Plugin from a network repository, so it is
-not part of the offline `verify.mjs` run. Everything beyond this table remains R8+.
+The state machine is intentionally tiny (counter + tap); `opurom-core` owns the
+full kernel. The Android shared objects are linked and packaged, and the app
+sources are compiled and packaged.
+
