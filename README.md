@@ -57,6 +57,26 @@ variables above to point the verifier at a specific installation.
 The Android Rust targets must be installed: `rustup target add aarch64-linux-android
 x86_64-linux-android`.
 
+### On-device APK
+
+`npm run build:apk` produces `dist/opurom-mobile-debug.apk`, an installable APK for
+device testing. The build runs `javac` and `d8` over the app sources, `aapt2 compile` and
+`aapt2 link` over the manifest, resources and compiled IR asset, then assembles `classes.dex`
+and the two ABI shared objects from `target/android/jniLibs/` into the archive. `zipalign`
+aligns stored entries to 4-byte boundaries; `apksigner` signs with a stable debug keystore in
+`dist/` (reused across rebuilds so `adb install -r` can replace an earlier build). The script
+then verifies the v1, v2 and v3 signatures, the alignment, and the launchable activity before
+reporting success. Every child process has a bounded timeout; a missing tool is a concrete
+error naming what to install.
+
+```sh
+npm run build:apk
+adb install -r dist/opurom-mobile-debug.apk
+```
+
+Entry timestamps are fixed, so rebuilding on the same host is byte-identical; the reported
+SHA-256 is stable. The debug keystore is a build output and is not committed.
+
 ### Measured results (macOS arm64, this host)
 
 | Check | Actual result |

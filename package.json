@@ -6,6 +6,7 @@
   "description": "OPUROM mobile native artifacts: arm64 iOS Rust staticlib plus arm64/x86_64 Android shared objects and Swift/JNI compile checks.",
   "scripts": {
     "verify": "node verify.mjs",
+    "build:apk": "node build-apk.mjs",
     "test": "node --test"
   }
 }
