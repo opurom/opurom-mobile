@@ -19,8 +19,10 @@ import java.nio.charset.StandardCharsets;
  * the state overrides and renders another frame through the same renderer.
  */
 public final class MainActivity extends Activity {
-    private static final int FRAME_WIDTH = 256;
-    private static final int FRAME_HEIGHT = 256;
+    // Wide enough for the Todo label: at 256 px the text is clipped before the
+    // interpolated state, so a tap would change state without changing pixels.
+    private static final int FRAME_WIDTH = 480;
+    private static final int FRAME_HEIGHT = 320;
     private static final String IR_ASSET = "todo.opuir.json";
 
     private long renderer;
