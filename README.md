@@ -46,13 +46,22 @@ local `toolchains/` directory. No absolute path is compiled into the tool.
 | `cargo`, `rustc` | any recent stable | `PATH` (plus `~/.cargo/bin` prepended) |
 | `javac` | JDK 21 | `OPUROM_JAVAC`, `JAVA_HOME`, then a sibling `toolchains/` JDK 21 |
 | Android NDK | NDK r27c | `OPR_NDK_HOME`, `ANDROID_NDK_HOME`, `ANDROID_NDK_ROOT`, then a sibling `toolchains/` NDK r27c |
-| Android SDK | platform 34 | `OPR_ANDROID_SDK`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, then a sibling `toolchains/` SDK |
-| `aapt2`, `d8` | build-tools 34 | newest `build-tools/*/` of the SDK that actually contains them |
+| Android SDK | newest installed platform with `android.jar` | `OPR_ANDROID_SDK`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, then a sibling `toolchains/` SDK |
+| `aapt2`, `d8` | newest complete build-tools release | newest `build-tools/*/` of the SDK that actually contains them |
 
 The local `toolchains/` fallback is resolved at runtime relative to the
 repository root, and the directory entries are scanned rather than named, so the
 layout on the host does not have to match a fixed path. Set the environment
 variables above to point the verifier at a specific installation.
+
+#### Android API and NDK configuration
+
+`android/gradle.properties` defines `opuromCompileSdk=36`, `opuromTargetSdk=36`,
+`opuromMinSdk=24`, and `opuromNdkVersion=27.2.12479018`. Gradle reads these
+project properties; changing them changes the SDK API levels and NDK version.
+`build-apk.mjs` and `verify.mjs` default to the newest installed Android
+platform with `android.jar`; `OPR_ANDROID_API` selects a specific API. The APK
+build prints the selected API and build-tools version in its final summary.
 
 The Android Rust targets must be installed: `rustup target add aarch64-linux-android
 x86_64-linux-android`.
