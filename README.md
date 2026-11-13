@@ -15,8 +15,8 @@ as a small deterministic state machine plus an additive IR path that draws real 
   the compiled Todo IR from its assets and renders real frames through JNI into an `ImageView`.
 
 On-host verification covers compilation, ELF provenance, dynamic symbol exports, Mach-O64
-provenance for the iOS archive, resource packaging and the full APK build; on-device
-execution and store distribution are packaged targets
+provenance for the iOS archive, resource packaging, APK ZIP structure and the full APK build;
+on-device execution and store distribution are packaged targets
 for hosts with an Android system image.
 
 ## Build and verify
@@ -61,9 +61,9 @@ x86_64-linux-android`.
 
 | Check | Actual result |
 | --- | --- |
-| `cargo test --offline` (host) | `20 passed; 0 failed; 0 ignored` |
+| `cargo test --offline` (host) | `28 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
-| `node --test` (host) | `11 passed; 0 failed; 0 skipped`; ABI fixtures, asset integrity and APK signing determinism |
+| `node --test` (host) | `12 passed; 0 failed; 0 skipped`; ABI fixtures, asset integrity and APK signing determinism |
 | `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
@@ -188,6 +188,26 @@ an arm64 macOS build of the same sources. Synthetic in-memory archives and objec
 exercise the reader and its rejection of malformed images on hosts without build output;
 the real archive is checked when the iOS build has produced it. The reader uses no
 external crate.
+
+### APK ZIP structure in pure Rust
+
+`tests/apk_structure.rs` reads the packaged APK as a ZIP archive with standard-library Rust
+only, so the packaging-structure evidence does not depend on `unzip(1)` or the Android SDK
+being present. The reader locates the end-of-central-directory record by searching backwards
+within the legal comment window, then walks every central directory header and cross-checks
+it against its local file header: matching signatures, entry names and compression methods,
+consistent sizes and CRC32, and data that stays inside the archive before the central
+directory. Stored entries are re-hashed with CRC32 and must keep their uncompressed data on
+a 4-byte boundary, matching `zipalign`. The synthetic signed archive also asserts the core
+APK entries (`AndroidManifest.xml`, `resources.arsc`, `classes.dex`, the IR asset) and the
+`META-INF` signing placeholders (`MANIFEST.MF`, a `.SF` file and an `.RSA`/`.DSA`/`.EC`
+block); cryptographic validity remains `apksigner`'s responsibility. Synthetic in-memory
+archives drive positive and negative cases on every host, including a flipped EOCD
+signature, a broken central directory header, a mismatched local header, tampered stored
+data, a missing core entry and a misaligned stored entry. The built `app.apk` is checked for
+its manifest, resource table, IR asset and stored-entry alignment when `verify.mjs` has
+produced it; otherwise the reader's synthetic cases still run and the host check skips with
+a concrete reason.
 
 ### Packaged asset integrity
 
@@ -321,12 +341,13 @@ Plugin from a network repository, so it is not part of the offline `verify.mjs` 
 | Real arm64/x86_64 Android shared objects with ELF magic + machine type evidence |
 | ELF64 class, endianness, type, machine and dynamic symbol exports read from the shared objects |
 | Mach-O64 magic, byte order, cpu type, file type and iOS load commands read from the iOS archive members |
+| APK ZIP central directory, local-header cross-check, stored-entry CRC32, alignment and signing placeholders in pure Rust |
 | Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) |
 | `javac` compile of the JNI declaration, the app sources and the JNI header syntax check |
 | `aapt2` resource compile + manifest/resource link, `d8` dexing |
 | `gradle :app:assembleDebug` producing a real APK with both `.so` files and the IR asset |
 | Swift wrapper typecheck against the C header, including the IR entry points |
-| Rust unit, ELF, Mach-O, real-renderer and Node spec tests |
+| Rust unit, ELF, Mach-O, APK ZIP structure, real-renderer and Node spec tests |
 | Offline, bounded verifier with tool-specific SKIPs |
 | IR C ABI pixels equal the shared software renderer's pixels; malformed IR returns status values |
 | Measured artifact size growth and measured per-frame render time |
