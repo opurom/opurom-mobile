@@ -62,6 +62,7 @@ x86_64-linux-android`.
 | --- | --- |
 | `cargo test --offline` (host) | `16 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
+| `node --test` (host) | `7 passed; 0 failed; 0 skipped`; ABI fixtures and asset integrity |
 | `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
@@ -168,6 +169,18 @@ the eight plain C ABI functions named in `verify.mjs`. Synthetic ELF64 images ex
 and its rejection of malformed headers on hosts without build output; the real shared objects are
 checked when `verify.mjs` has produced them. The reader uses no NDK readelf binary and no external
 crate. `node verify.mjs` runs this test as one of its cargo steps.
+
+### Packaged asset integrity
+
+`test/asset-integrity.test.mjs` runs with `node --test`. It compiles
+`../opurom-examples/todo.opu` with the real `opuromc` into a temp file and requires the bytes to
+equal `android/app/src/main/assets/todo.opuir.json`. Tampered and truncated copies are written to
+real temp files and must be rejected with a reason naming the differing byte or the length
+mismatch; the shipped asset is only read. The ELF machine-type table carries the exact
+little-endian `e_machine` bytes for every shipped ABI (`arm64-v8a`: `b7 00`, `x86_64`: `3e 00`);
+the test checks it against `verify.mjs`'s `ANDROID_ABIS`, the built `jniLibs` ABI set and the real
+ELF headers, and rejects a flipped or truncated header. Without `opuromc` or the built shared
+objects the corresponding checks skip with a concrete reason; no IR or ELF data is mocked.
 
 ## C ABI: ownership, lifetime, validation
 
