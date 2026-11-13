@@ -5,10 +5,15 @@ import android.app.Activity;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Bundle;
+import android.view.WindowManager;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -75,21 +80,37 @@ public final class MainActivity extends Activity {
 
         getWindow().setStatusBarColor(dark ? 0xFF0B1220 : 0xFF097FEB);
         getWindow().setNavigationBarColor(background);
+        requestHighestRefreshRate();
+
+        // Actions live outside the scrollable area so they stay clickable at
+        // every scroll offset; a ScrollView child with wrap_content height can
+        // otherwise leave its last row outside the touchable bounds.
+        LinearLayout root = column(0);
+        root.setBackgroundColor(background);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(background);
         scroll.setFillViewport(true);
-
+        scroll.setVerticalScrollBarEnabled(false);
         LinearLayout page = column(0);
         int pagePad = dp(18);
-        page.setPadding(pagePad, dp(18), pagePad, dp(28));
-
+        page.setPadding(pagePad, dp(18), pagePad, dp(12));
         page.addView(buildHeader());
         page.addView(buildBody());
-        page.addView(buildActions());
         scroll.addView(page, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        setContentView(scroll);
+        root.addView(scroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout dock = column(0);
+        dock.setBackgroundColor(background);
+        dock.setPadding(pagePad, dp(10), pagePad, dp(18));
+        dock.addView(buildActions());
+        dock.addView(buildVersionLine());
+        dock.setElevation(dp(10));
+        root.addView(dock, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        setContentView(root);
     }
 
     // ------------------------------------------------------------------
@@ -179,6 +200,7 @@ public final class MainActivity extends Activity {
 
         frameView = new ImageView(this);
         frameView.setScaleType(ImageView.ScaleType.FIT_XY);
+        frameView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         holder.addView(frameView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(wideFrameHeight())));
 
@@ -279,7 +301,7 @@ public final class MainActivity extends Activity {
         bar.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(20);
+        lp.topMargin = dp(2);
         bar.setLayoutParams(lp);
 
         LinearLayout refresh = actionButton("Refresh", 0xFF097FEB, 0xFF5B4BEF);
@@ -352,6 +374,7 @@ public final class MainActivity extends Activity {
                     | (pixels[offset + 2] & 0xff);
         }
         Bitmap next = Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888);
+        next = rounded(next, dp(18));
         if (lastFrame != null) {
             frameView.setAlpha(0.35f);
             frameView.animate().alpha(1f).setDuration(280).start();
@@ -405,6 +428,53 @@ public final class MainActivity extends Activity {
             return false;
         });
         return button;
+    }
+
+    private void requestHighestRefreshRate() {
+        // Devices expose 90/120 Hz modes; pick the fastest supported mode so
+        // scrolling and press animations are not capped at 60 Hz.
+        WindowManager.LayoutParams attrs = getWindow().getAttributes();
+        float best = 0f;
+        for (android.view.Display.Mode mode : getDisplay().getSupportedModes()) {
+            if (mode.getRefreshRate() > best) {
+                best = mode.getRefreshRate();
+                attrs.preferredDisplayModeId = mode.getModeId();
+            }
+        }
+        if (best > 0f) getWindow().setAttributes(attrs);
+    }
+
+    private Bitmap rounded(Bitmap source, int radius) {
+        Bitmap out = Bitmap.createBitmap(source.getWidth(), source.getHeight(),
+                Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        android.graphics.RectF rect = new android.graphics.RectF(
+                0, 0, source.getWidth(), source.getHeight());
+        canvas.drawRoundRect(rect, radius, radius, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(source, 0, 0, paint);
+        source.recycle();
+        return out;
+    }
+
+    private TextView buildVersionLine() {
+        String version = "";
+        try {
+            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) {
+            // The package is always installed while this Activity runs.
+        }
+        TextView view = label("OPUROM  ·  v" + (version == null ? "0.1.0" : version)
+                        + "  ·  API 36  ·  NDK r27c", 10,
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), muted);
+        view.setLetterSpacing(0.08f);
+        view.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(12);
+        view.setLayoutParams(lp);
+        return view;
     }
 
     // ------------------------------------------------------------------
