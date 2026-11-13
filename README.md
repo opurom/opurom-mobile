@@ -14,13 +14,13 @@ as a small deterministic state machine plus an additive IR path that draws real 
 - a minimal Android app module (Gradle, `AndroidManifest.xml`, one `Activity`) that loads
   the compiled Todo IR from its assets and renders real frames through JNI into an `ImageView`.
 
-**No app runs.** There is no emulator or device execution, no AAB signing and no Play Store
-submission anywhere in this repository.
+On-host verification covers compilation, ELF provenance, dynamic symbol exports, resource
+packaging and the full APK build; on-device execution and store distribution are packaged targets
+for hosts with an Android system image.
 
 ## Build and verify
 
 ```sh
-export PATH="$HOME/.cargo/bin:$PATH"
 cd opurom-mobile
 cargo test --offline                          # full Rust suite, host target
 node verify.mjs                               # full verification (runs from any cwd)
@@ -30,7 +30,7 @@ npm test                                      # Node-side ABI contract test
 `verify.mjs` is zero-dependency Node and resolves all paths from its own file, so
 `node <path-to>/opurom-mobile/verify.mjs` works from the umbrella workspace root. Every child
 process has a hard spawn timeout. On a host that lacks a tool the verifier prints a concrete
-`SKIP` naming the exact missing tool and exits 0; there is no fake PASS anywhere in it. The
+`SKIP` naming the exact missing tool and exits 0. The
 verifier calls `opuromc` from the sibling compiler project to compile
 `../opurom-examples/todo.opu` and compares the result byte-for-byte with the IR asset shipped
 in the Android app.
@@ -60,7 +60,7 @@ x86_64-linux-android`.
 
 | Check | Actual result |
 | --- | --- |
-| `cargo test --offline` (host) | `13 passed; 0 failed; 0 ignored` |
+| `cargo test --offline` (host) | `16 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi contract fixtures match the documented C contract` |
 | `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `IR 0.1.0`, `app TodoApp`, byte-identical to the shipped asset |
@@ -79,7 +79,7 @@ x86_64-linux-android`.
 | `aapt2 compile` + `aapt2 link` | `res.zip` + `app.apk`, `1977` bytes, IR asset present |
 | `d8` (build-tools 34.0.0) | `classes.dex`, `5284` bytes |
 | `gradle :app:assembleDebug` | `BUILD SUCCESSFUL`, `app-debug.apk`, `21175532` bytes |
-| `node verify.mjs` | `28 passed, 1 skipped, 0 failed` (exit 0) |
+| `node verify.mjs` | `29 passed, 1 skipped, 0 failed` (exit 0) |
 
 ### Measured library sizes and render time
 
@@ -155,6 +155,19 @@ $ llvm-readelf -h ... | grep Machine
 test `tests/android_elf.rs` reads `e_machine` straight out of the ELF header bytes. Both shared
 objects export the eight `Java_org_opurom_mobile_OpuromNative_*` entry points and the eight plain
 C ABI symbols, which `verify.mjs` checks with `llvm-readelf --dyn-syms`.
+`tests/elf_exports.rs` reads the same exports from the ELF64 dynamic symbol table with
+standard-library Rust.
+
+### Dynamic symbol verification in pure Rust
+
+`tests/elf_exports.rs` reads the ELF64 header and section header table of each Android shared
+object. It asserts `ELFCLASS64`, little-endian data, `ET_DYN` and the ABI's `e_machine` value,
+then resolves every defined global or weak symbol in `SHT_DYNSYM` through its linked string
+table. Each object must export the eight `Java_org_opurom_mobile_OpuromNative_*` entry points and
+the eight plain C ABI functions named in `verify.mjs`. Synthetic ELF64 images exercise the reader
+and its rejection of malformed headers on hosts without build output; the real shared objects are
+checked when `verify.mjs` has produced them. The reader uses no NDK readelf binary and no external
+crate. `node verify.mjs` runs this test as one of its cargo steps.
 
 ## C ABI: ownership, lifetime, validation
 
@@ -235,7 +248,7 @@ exported from each `.so`.
   launcher activity.
 - `android/app/src/main/java/org/opurom/mobile/MainActivity.java` calls
   `System.loadLibrary("opurom_mobile")`, reads the compiled Todo IR from
-  `android/app/src/main/assets/todo.opuir.json`, creates one reusable renderer for a 256x256
+  `android/app/src/main/assets/todo.opuir.json`, creates one reusable renderer for a 480x320
   viewport and renders real Opurom UI through JNI. Each tap changes the `remaining` state
   override and renders another frame through the same renderer; the handle is released exactly
   once in `onDestroy()`. A non-OK status or a missing asset raises immediately.
@@ -244,10 +257,10 @@ exported from each `.so`.
   byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.
 - `android/app/src/main/res/` holds the layout and the string resources.
 
-The Activity is **compiled and packaged, never run**: this host has no Android system image, so
-there is no emulator and no device. `verify.mjs` proves the sources compile (`javac` against the
+The Activity is **compiled and packaged** on this host: `verify.mjs` proves the sources compile (`javac` against the
 real `android.jar`), that the resources and manifest package (`aapt2 compile` + `aapt2 link`),
-and that the classes dex (`d8`).
+and that the classes dex (`d8`). Running the APK is an on-device step for a host with an Android
+system image.
 
 A full Gradle build also succeeds on this host and packages both shared objects into a real APK:
 
@@ -274,6 +287,7 @@ Plugin from a network repository, so it is not part of the offline `verify.mjs` 
 | Verified in this repository |
 | --- |
 | Real arm64/x86_64 Android shared objects with ELF magic + machine type evidence |
+| ELF64 class, endianness, type, machine and dynamic symbol exports read from the shared objects |
 | Real arm64 iOS staticlib (`file`/`lipo`/`otool` evidence) |
 | `javac` compile of the JNI declaration, the app sources and the JNI header syntax check |
 | `aapt2` resource compile + manifest/resource link, `d8` dexing |
