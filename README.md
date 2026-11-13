@@ -328,12 +328,20 @@ exported from each `.so`.
 - `android/app/src/main/AndroidManifest.xml` declares `org.opurom.mobile.MainActivity` as the
   launcher activity.
 - `android/app/src/main/java/org/opurom/mobile/MainActivity.java` builds the adaptive native
-  shell: a gradient header, session and task cards, and a Refresh/Reset action bar. Below
-  `600 dp` the shell is a single scrollable column; at `600 dp` and above it splits into two
-  columns. All typography uses platform typefaces at density-independent sizes, with a dark
-  palette selected from `uiMode`. Refresh rotates its glyph, fades the counter, re-renders the
-  frame and crossfades it; Reset restores the initial state. Every button has a ripple and a
-  press-scale animator.
+  shell: a gradient header, session and task cards, and a Refresh/Reset action bar. All
+  typography uses platform typefaces at density-independent sizes, with a dark palette selected
+  from `uiMode`. Refresh rotates its glyph, fades the counter, re-renders the frame and crossfades
+  it; Reset restores the initial state. Every button has a ripple and a press-scale animator.
+- The shell reflows from three width tiers, and the breakpoints are the renderer's own logical
+  pixel boundaries. Below `600 dp` the shell is a single scrollable column; at `600 dp` and
+  above it splits into two columns; at `1200 dp` and above it becomes a three-column workbench
+  layout of a navigation rail, a renderer column and a detail column. The tier is chosen by the
+  `screenWidthDp` measured value, so a wide window shows the rail, the self-drawn frame and the
+  detail view side by side while a phone shows one column. The rail's three views switch the
+  detail column between the session summary, the task list and both; the stats and task cards
+  are moved between views instead of rebuilt, so one set of state is on screen at a time. The
+  frame card is taller at each wider tier and the frame is re-rendered whenever its measured
+  viewport changes, so the same APK fills its card at every width without letterboxing.
 - `android/app/src/main/assets/dashboard.opuir.json` is a graphics-only IR: gradient header,
   particle field and rounded cards with shadows. The self-drawn frame renders through JNI into
   the card's actual viewport, so it fills the card instead of sitting at a fixed size. Native
