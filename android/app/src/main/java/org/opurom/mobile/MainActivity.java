@@ -34,13 +34,25 @@ import java.nio.charset.StandardCharsets;
  * OPUROM Android host: a native adaptive shell around one self-drawn OPUROM
  * frame. The frame renders graphics (gradient, particles, cards) through JNI;
  * all typography and controls are native widgets so text uses the platform
- * typeface at every density. Narrow screens use one column, wide screens two.
+ * typeface at every density. The shell reflows from one column on a phone to
+ * two columns on a tablet and a navigation rail plus content plus detail
+ * column on a desktop-width window.
  */
 public final class MainActivity extends Activity {
 
     private static final String GRAPHICS_IR = "dashboard.opuir.json";
     private static final int MAX_FRAME_PIXELS = 1024;
+
+    // Column breakpoints mirror the renderer's width tiers: the shell and the
+    // software renderer reflow at the same logical-pixel boundaries.
     private static final int WIDE_COLUMN_DP = 600;
+    private static final int THREE_COLUMN_DP = 1200;
+
+    private static final int TIER_COMPACT = 0;
+    private static final int TIER_TWO_COLUMN = 1;
+    private static final int TIER_THREE_COLUMN = 2;
+
+    private static final String[] VIEWS = {"Overview", "Activity", "Status"};
 
     private static final String[] TASKS = {
             "Inspect the north array", "Calibrate the panel", "Publish the field report"
@@ -57,7 +69,18 @@ public final class MainActivity extends Activity {
     private TextView statusValue;
     private TextView refreshGlyph;
     private LinearLayout taskRows;
+    private int lastMeasuredWidth = -1;
+    private int lastMeasuredHeight = -1;
+
     private Bitmap lastFrame;
+
+    // Detail-column view switching: one stats card and one task card are moved
+    // between the detail panels so the selected view shows one live instance.
+    private LinearLayout detailContent;
+    private LinearLayout statsCard;
+    private LinearLayout taskCard;
+    private LinearLayout[] navRows = new LinearLayout[VIEWS.length];
+    private int activeView;
 
     // Palette resolved once per configuration; the self-drawn frame keeps its
     // own colours so pixel parity with the software renderer is preserved.
@@ -96,7 +119,7 @@ public final class MainActivity extends Activity {
         int pagePad = dp(18);
         page.setPadding(pagePad, dp(18), pagePad, dp(12));
         page.addView(buildHeader());
-        page.addView(buildBody());
+        page.addView(buildBody(layoutTier(getResources().getConfiguration().screenWidthDp)));
         scroll.addView(page, new ScrollView.LayoutParams(
                 ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
         root.addView(scroll, new LinearLayout.LayoutParams(
@@ -115,8 +138,17 @@ public final class MainActivity extends Activity {
 
     // ------------------------------------------------------------------
     // Layout. Widths are measured in dp so the same structure works from a
-    // 320 dp phone to a tablet; the breakpoint only changes the column count.
+    // 320 dp phone to a desktop-width window; the width decides the column
+    // count. layoutTier is package-visible so the column rule stays testable
+    // without an emulator.
     // ------------------------------------------------------------------
+    /** One column below 600 dp, two up to 1199 dp, three at 1200 dp and above. */
+    static int layoutTier(int widthDp) {
+        if (widthDp >= THREE_COLUMN_DP) return TIER_THREE_COLUMN;
+        if (widthDp >= WIDE_COLUMN_DP) return TIER_TWO_COLUMN;
+        return TIER_COMPACT;
+    }
+
     private View buildHeader() {
         GradientDrawable bg = new GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
@@ -152,41 +184,147 @@ public final class MainActivity extends Activity {
         return header;
     }
 
-    private View buildBody() {
-        boolean wide = getResources().getConfiguration().screenWidthDp >= WIDE_COLUMN_DP;
+    private View buildBody(int tier) {
         LinearLayout body = new LinearLayout(this);
-        body.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        body.setOrientation(tier == TIER_COMPACT ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         body.setBaselineAligned(false);
 
-        LinearLayout left = cardColumn();
-        left.addView(sectionTitle("Renderer output"));
-        left.addView(sectionCaption("Self-drawn RGBA frame · gradient, particles, cards"));
-        left.addView(buildFrameCard());
+        LinearLayout renderer = rendererColumn();
+        LinearLayout detail = detailColumn();
 
-        LinearLayout right = cardColumn();
-        right.addView(sectionTitle("Session"));
-        right.addView(buildStatsCard());
-        right.addView(sectionTitle("Tasks"));
-        right.addView(buildTaskCard());
-
-        if (wide) {
-            LinearLayout.LayoutParams a = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 1.15f);
-            a.rightMargin = dp(9);
-            LinearLayout.LayoutParams b = new LinearLayout.LayoutParams(0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT, 0.85f);
-            b.leftMargin = dp(9);
-            body.addView(left, a);
-            body.addView(right, b);
+        if (tier == TIER_THREE_COLUMN) {
+            // Navigation rail, then the renderer column, then the selected detail view.
+            body.addView(buildNavRail(), new LinearLayout.LayoutParams(
+                    dp(210), LinearLayout.LayoutParams.WRAP_CONTENT));
+            body.addView(renderer, weighted(1.15f));
+            body.addView(detail, weighted(0.85f));
+        } else if (tier == TIER_TWO_COLUMN) {
+            body.addView(renderer, weighted(1.15f));
+            body.addView(detail, weighted(0.85f));
         } else {
-            body.addView(left, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            LinearLayout.LayoutParams lower = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            body.addView(renderer, singleColumnParams());
+            LinearLayout.LayoutParams lower = singleColumnParams();
             lower.topMargin = dp(14);
-            body.addView(right, lower);
+            body.addView(detail, lower);
         }
         return body;
+    }
+
+    private LinearLayout rendererColumn() {
+        LinearLayout column = cardColumn();
+        column.addView(sectionTitle("Renderer output"));
+        column.addView(sectionCaption("Self-drawn RGBA frame · gradient, particles, cards"));
+        column.addView(buildFrameCard());
+        return column;
+    }
+
+    private LinearLayout detailColumn() {
+        // One detail container; the navigation rail swaps its content per view.
+        detailContent = cardColumn();
+        buildStatsCard();
+        buildTaskCard();
+        selectDetail(0);
+        return detailContent;
+    }
+
+    /**
+     * Fills the detail container with the selected view. The stats and task
+     * cards are moved rather than rebuilt, so one set of state is on screen at
+     * a time instead of two instances of the same card.
+     */
+    private void selectDetail(int index) {
+        activeView = index;
+        detailContent.removeAllViews();
+        if (index == 1) {
+            detailContent.addView(sectionTitle("Tasks"));
+            detailContent.addView(taskCard, detailCardParams());
+        } else if (index == 2) {
+            detailContent.addView(sectionTitle("Session"));
+            detailContent.addView(statsCard, detailCardParams());
+        } else {
+            detailContent.addView(sectionTitle("Session"));
+            detailContent.addView(statsCard, detailCardParams());
+            detailContent.addView(sectionTitle("Tasks"));
+            detailContent.addView(taskCard, detailCardParams());
+        }
+        for (int i = 0; i < navRows.length; i++) {
+            if (navRows[i] != null) refreshNavRow(navRows[i], i == index);
+        }
+    }
+
+    private void onNav(int index) {
+        selectDetail(index);
+    }
+
+    private LinearLayout buildNavRail() {
+        LinearLayout rail = column(0);
+        GradientDrawable railCard = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{0xFF2A5BD7, 0xFF123C8C});
+        railCard.setCornerRadius(dp(16));
+
+        LinearLayout headerCard = column(dp(16));
+        headerCard.setBackground(railCard);
+        headerCard.addView(label("Navigation", 16,
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFFFFFFFF));
+        TextView subtitle = label("one IR, every screen", 11,
+                Typeface.create("sans-serif", Typeface.NORMAL), 0xC9DCFF);
+        subtitle.setPadding(0, dp(4), 0, 0);
+        headerCard.addView(subtitle);
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        headerLp.bottomMargin = dp(12);
+        headerCard.setLayoutParams(headerLp);
+        rail.addView(headerCard);
+
+        for (int i = 0; i < VIEWS.length; i++) {
+            navRows[i] = navRow(VIEWS[i], i);
+            LinearLayout.LayoutParams lp = singleColumnParams();
+            lp.topMargin = dp(8);
+            rail.addView(navRows[i], lp);
+        }
+        return rail;
+    }
+
+    private LinearLayout navRow(String name, int index) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(12), dp(14), dp(12));
+        row.addView(label(name, 13,
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), text));
+        row.setTag(index);
+        row.setOnClickListener(view -> onNav((Integer) view.getTag()));
+        refreshNavRow(row, index == 0);
+        return row;
+    }
+
+    private void refreshNavRow(LinearLayout row, boolean active) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(active ? accent : card);
+        shape.setCornerRadius(dp(14));
+        shape.setStroke(1, active ? card : divider);
+        row.setBackground(shape);
+        TextView textView = (TextView) row.getChildAt(0);
+        textView.setTextColor(active ? 0xFFFFFFFF : text);
+    }
+
+    private LinearLayout.LayoutParams weighted(float weight) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, weight);
+        params.leftMargin = dp(9);
+        return params;
+    }
+
+    private LinearLayout.LayoutParams singleColumnParams() {
+        return new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+    }
+
+    private LinearLayout.LayoutParams detailCardParams() {
+        LinearLayout.LayoutParams params = singleColumnParams();
+        params.topMargin = dp(12);
+        return params;
     }
 
     private View buildFrameCard() {
@@ -202,7 +340,12 @@ public final class MainActivity extends Activity {
         frameView.setScaleType(ImageView.ScaleType.FIT_XY);
         frameView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         holder.addView(frameView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(wideFrameHeight())));
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(frameHeight())));
+
+        // A window can change size without recreating the Activity; re-render
+        // whenever the measured viewport changes so the frame stays tier-sized.
+        frameView.addOnLayoutChangeListener((view, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> renderFrameIfSizeChanged());
 
         // Native typography sits above the self-drawn frame: this is the
         // documented hybrid mode, not a second renderer.
@@ -222,6 +365,7 @@ public final class MainActivity extends Activity {
 
     private View buildStatsCard() {
         LinearLayout box = paddedCard();
+        statsCard = box;
         remainingValue = label(String.valueOf(remaining), 46,
                 Typeface.create("sans-serif-light", Typeface.NORMAL), accent);
         remainingValue.setIncludeFontPadding(false);
@@ -352,11 +496,20 @@ public final class MainActivity extends Activity {
     // ------------------------------------------------------------------
     private void renderFrame() {
         if (frameView == null) return;
-        int width = frameView.getWidth();
-        int height = frameView.getHeight();
-        if (width <= 0 || height <= 0) return;
-        width = Math.min(width, MAX_FRAME_PIXELS);
-        height = Math.min(height, MAX_FRAME_PIXELS);
+        int measuredWidth = frameView.getWidth();
+        int measuredHeight = frameView.getHeight();
+        if (measuredWidth <= 0 || measuredHeight <= 0) return;
+        lastMeasuredWidth = measuredWidth;
+        lastMeasuredHeight = measuredHeight;
+
+        int width = measuredWidth;
+        int height = measuredHeight;
+        // Render at the view's aspect ratio: capping both dimensions by the same
+        // factor keeps the bitmap proportional, so FIT_XY fills the card without
+        // letterbox bars or a stretched frame at wide window sizes.
+        float scale = Math.min(1f, MAX_FRAME_PIXELS / Math.max(width, height));
+        width = Math.max(1, (int) (width * scale));
+        height = Math.max(1, (int) (height * scale));
 
         byte[] state = ("{\"remaining\":" + remaining + "}")
                 .getBytes(StandardCharsets.UTF_8);
@@ -381,6 +534,17 @@ public final class MainActivity extends Activity {
         }
         frameView.setImageBitmap(next);
         lastFrame = next;
+    }
+
+    // The frame view can change size without a state change; re-render only when
+    // its measured viewport actually changed so a reflow is not re-rendered twice.
+    private void renderFrameIfSizeChanged() {
+        if (frameView == null) return;
+        int measuredWidth = frameView.getWidth();
+        int measuredHeight = frameView.getHeight();
+        if (measuredWidth <= 0 || measuredHeight <= 0) return;
+        if (measuredWidth == lastMeasuredWidth && measuredHeight == lastMeasuredHeight) return;
+        renderFrame();
     }
 
     // ------------------------------------------------------------------
@@ -570,8 +734,13 @@ public final class MainActivity extends Activity {
         return view;
     }
 
-    private int wideFrameHeight() {
-        return getResources().getConfiguration().screenWidthDp >= WIDE_COLUMN_DP ? 230 : 200;
+    // The frame is taller as more vertical room appears: the desktop tier has
+    // room for the rail, the renderer column and the detail column side by side.
+    private int frameHeight() {
+        int tier = layoutTier(getResources().getConfiguration().screenWidthDp);
+        if (tier == TIER_THREE_COLUMN) return 300;
+        if (tier == TIER_TWO_COLUMN) return 230;
+        return 200;
     }
 
     private int dp(float value) {
