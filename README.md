@@ -1,9 +1,9 @@
 # opurom-mobile
 
-**Mobile native artifacts** slice of Opurom ([the platform implementation](../opurom-examples/golden/the platform implementation), framework rules) plus the
-**Android native library and app module** slice ([the network implementation](../opurom-examples/golden/the network implementation), framework rules). One independent local git repo, one Rust crate with a path dependency on the sibling
-[opurom-render](../opurom-render/README.md) software renderer, and no network access at build
-time. It implements the C ABI of the [Platform Adapter contract](../opurom-examples/golden/the framework implementation)
+**Mobile native artifacts** slice of Opurom ([the platform implementation](the platform implementation), framework rules) plus the
+**Android native library and app module** slice ([the network implementation](the network implementation), framework rules). One independent local git repo, one Rust crate with a path dependency on the sibling
+[opurom-render](https://github.com/opurom/opurom-render/blob/main/README.md) software renderer, and no network access at build
+time. It implements the C ABI of the [Platform Adapter contract](the framework implementation)
 as a small deterministic state machine plus an additive IR path that draws real Opurom UI:
 
 - a real `aarch64-apple-ios` static library with `file`/`lipo`/`otool` evidence;
