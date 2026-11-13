@@ -9,7 +9,7 @@
 'use strict';
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -691,8 +691,25 @@ if (!buildTools) {
       ], { timeoutMs: 120000 });
       const apk = path.join(aapt2Work, 'linked', 'app.apk');
       if (linkRun.ok && existsSync(apk)) {
-        pass(`aapt2 link OK: AndroidManifest.xml + resources + Todo IR asset -> ${apk} ` +
-          `(${statSync(apk).size} bytes, ${linkRun.ms}ms)`);
+        // aapt2 link stores PNG resources uncompressed but does not align
+        // them; the platform loader requires stored entries to be 4-byte
+        // aligned, so align the linked APK before it is inspected or tested.
+        const zipalign = path.join(buildTools, 'zipalign');
+        if (!existsSync(zipalign)) {
+          fail('zipalign not found in build-tools', buildTools);
+        } else {
+          const aligned = path.join(aapt2Work, 'linked', 'app.apk.aligned');
+          const alignRun = run('zipalign', [zipalign, '-f', '-p', '4', apk, aligned], { timeoutMs: 60000 });
+          if (!alignRun.ok || !existsSync(aligned)) {
+            fail('zipalign 4-byte alignment failed', `${alignRun.stdout}\n${alignRun.stderr}`);
+          } else {
+            rmSync(apk, { force: true });
+            copyFileSync(aligned, apk);
+            rmSync(aligned, { force: true });
+            pass(`aapt2 link + zipalign OK: AndroidManifest.xml + resources + Todo IR asset -> ${apk} ` +
+              `(${statSync(apk).size} bytes, ${linkRun.ms}ms)`);
+          }
+        }
         const listing = run('unzip -l', ['unzip', '-l', apk], { timeoutMs: 30000 });
         if (/ENOENT|not found/i.test(listing.stderr)) {
           skip('unzip(1) is unavailable: APK asset listing not checked (aapt2 link succeeded).');

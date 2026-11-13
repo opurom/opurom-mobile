@@ -54,34 +54,125 @@
   ],
   "theme": {
     "accent": "#097FEB",
-    "mode": "system",
-    "radius": 12
+    "mode": "light",
+    "radius": 14
   },
   "tree": {
     "children": [
       {
-        "children": [],
+        "children": [
+          {
+            "children": [],
+            "events": {},
+            "id": 2,
+            "kind": "Text",
+            "props": {
+              "color": "#FFFFFF",
+              "size": 28,
+              "value": "OPUROM Todo"
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 3,
+            "kind": "Text",
+            "props": {
+              "color": "#D6E8FF",
+              "size": 13,
+              "value": "UI, model and API in one source file"
+            }
+          }
+        ],
         "events": {},
         "id": 1,
-        "kind": "Text",
+        "kind": "Container",
         "props": {
-          "size": 20,
-          "value": "OPUROM Todo - remaining: {remaining}"
+          "animate": "ease",
+          "gradient": "#097FEB,#043B70",
+          "padding": 26,
+          "radius": 18,
+          "shadow": 4
         }
       },
       {
-        "children": [],
-        "events": {
-          "tap": {
-            "op": "add",
-            "target": "remaining",
-            "value": 1
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 6,
+                "kind": "Text",
+                "props": {
+                  "color": "#667085",
+                  "size": 13,
+                  "value": "Remaining"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 7,
+                "kind": "Text",
+                "props": {
+                  "color": "#097FEB",
+                  "size": 38,
+                  "value": "{remaining}"
+                }
+              }
+            ],
+            "events": {},
+            "id": 5,
+            "kind": "Column",
+            "props": {
+              "gap": 8
+            }
           }
-        },
-        "id": 2,
-        "kind": "Button",
+        ],
+        "events": {},
+        "id": 4,
+        "kind": "Container",
         "props": {
-          "label": "Refresh"
+          "border": "#E4E9F2",
+          "color": "#FFFFFF",
+          "padding": 24,
+          "radius": 16,
+          "shadow": 3
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [],
+            "events": {
+              "tap": {
+                "op": "add",
+                "target": "remaining",
+                "value": 1
+              }
+            },
+            "id": 9,
+            "kind": "Button",
+            "props": {
+              "animate": "spring",
+              "color": "#097FEB",
+              "fontScale": 1.1,
+              "label": "Refresh",
+              "padding": 14,
+              "radius": 14,
+              "shadow": 2
+            }
+          }
+        ],
+        "events": {},
+        "id": 8,
+        "kind": "Container",
+        "props": {
+          "color": "#F4F7FB",
+          "padding": 16,
+          "radius": 16,
+          "shadow": 3
         }
       }
     ],
@@ -89,8 +180,8 @@
     "id": 0,
     "kind": "Column",
     "props": {
-      "gap": 8,
-      "padding": 16
+      "gap": 20,
+      "padding": 24
     }
   }
 }

@@ -204,3 +204,50 @@ test('shipped ELF headers carry the exact expected machine bytes', (t) => {
     assert.match(checkMachine(truncated, abi), /truncated/, `${abi} truncated header`);
   }
 });
+
+// aapt2 link stores PNG resources uncompressed but leaves their data
+// unaligned; verify.mjs must zipalign the linked APK so the platform loader
+// accepts it. Parse the real ZIP central directory to prove stored entries
+// are 4-byte aligned and PNGs stayed stored (never deflated).
+function storedEntries(apk) {
+  const bytes = readFileSync(apk);
+  const eocd = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  assert.ok(eocd >= 0, 'linked APK has no end-of-central-directory record');
+  const count = bytes.readUInt16LE(eocd + 10);
+  let cursor = bytes.readUInt32LE(eocd + 16);
+  const entries = [];
+  for (let index = 0; index < count; index += 1) {
+    assert.equal(bytes.readUInt32LE(cursor), 0x02014b50, `central header ${index} signature`);
+    const method = bytes.readUInt16LE(cursor + 10);
+    const nameLen = bytes.readUInt16LE(cursor + 28);
+    const extraLen = bytes.readUInt16LE(cursor + 30);
+    const commentLen = bytes.readUInt16LE(cursor + 32);
+    const local = bytes.readUInt32LE(cursor + 42);
+    const name = bytes.subarray(cursor + 46, cursor + 46 + nameLen).toString('utf8');
+    assert.equal(bytes.readUInt32LE(local), 0x04034b50, `local header for ${name}`);
+    const data = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+    entries.push({ name, method, data });
+    cursor += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
+test('verify.mjs aligns the linked APK before the packaging checks', (t) => {
+  assert.match(readFileSync(VERIFY, 'utf8'), /run\('zipalign', \[zipalign, '-f', '-p', '4'/,
+    'verify.mjs must zipalign the aapt2-linked APK to 4-byte boundaries');
+  const apk = path.join(ROOT, 'target', 'verify', 'aapt2', 'linked', 'app.apk');
+  if (!existsSync(apk)) {
+    t.skip('needs target/verify/aapt2/linked/app.apk from node verify.mjs');
+    return;
+  }
+  const entries = storedEntries(apk);
+  const png = entries.filter((entry) => entry.name.endsWith('.png'));
+  assert.ok(png.length > 0, 'linked APK carries the launcher PNG resources');
+  for (const entry of png) {
+    assert.equal(entry.method, 0, `${entry.name} must stay stored (uncompressed)`);
+    assert.equal(entry.data % 4, 0, `${entry.name} stored data is not 4-byte aligned`);
+  }
+  for (const entry of entries.filter((item) => item.method === 0)) {
+    assert.equal(entry.data % 4, 0, `stored entry ${entry.name} data is not 4-byte aligned`);
+  }
+});
