@@ -89,6 +89,14 @@ public final class MainActivity extends Activity {
 
     private Bitmap lastFrame;
 
+    // One persistent renderer for the current frame viewport. Rendering through it
+    // lets the renderer reuse the previous frame, so a state change recomputes only
+    // the dirty region instead of the whole surface. Recreated when the measured
+    // viewport changes; zero (disabled) falls back to the one-shot renderer.
+    private long renderer;
+    private int rendererWidth;
+    private int rendererHeight;
+
     // Detail-column view switching: one stats card and one task card are moved
     // between the detail panels so the selected view shows one live instance.
     private LinearLayout detailContent;
@@ -530,9 +538,26 @@ public final class MainActivity extends Activity {
         byte[] state = ("{\"remaining\":" + remaining + "}")
                 .getBytes(StandardCharsets.UTF_8);
         byte[] pixels = new byte[width * height * 4];
-        int status = OpuromNative.opuFrameFromIr(graphicsIr, state, pixels, width, height);
+        // Keep one renderer per viewport so the renderer can reuse the previous
+        // frame. Recreate it when the measured viewport changes; if creation fails,
+        // fall back to the one-shot renderer rather than failing the frame.
+        if (renderer != 0
+                && (rendererWidth != width || rendererHeight != height)) {
+            OpuromNative.opuRendererFree(renderer);
+            renderer = 0;
+        }
+        if (renderer == 0) {
+            renderer = OpuromNative.opuRendererNew(width, height);
+            if (renderer != 0) {
+                rendererWidth = width;
+                rendererHeight = height;
+            }
+        }
+        int status = renderer != 0
+            ? OpuromNative.opuRendererFrame(renderer, graphicsIr, state, pixels, width, height)
+            : OpuromNative.opuFrameFromIr(graphicsIr, state, pixels, width, height);
         if (status != OpuromNative.OK) {
-            throw new IllegalStateException("opu_frame_from_ir failed with status " + status);
+            throw new IllegalStateException("frame render failed with status " + status);
         }
         int[] argb = new int[width * height];
         for (int index = 0; index < argb.length; index++) {
@@ -797,6 +822,15 @@ public final class MainActivity extends Activity {
         } catch (Exception error) {
             throw new IllegalStateException("cannot unseal IR asset " + name, error);
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (renderer != 0) {
+            OpuromNative.opuRendererFree(renderer);
+            renderer = 0;
+        }
+        super.onDestroy();
     }
 
     private static byte[] digestKey(String secret) {

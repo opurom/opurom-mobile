@@ -361,8 +361,10 @@ exported from each `.so`.
   viewport changes, so the same APK fills its card at every width without letterboxing.
 - `android/app/src/main/assets/dashboard.opuir.json` is a graphics-only IR: gradient header,
   particle field and rounded cards with shadows. The self-drawn frame renders through JNI into
-  the card's actual viewport, so it fills the card instead of sitting at a fixed size. Native
-  text is layered above the frame, which is the documented hybrid mode: self-drawn graphics
+  the card's actual viewport, so it fills the card instead of sitting at a fixed size. The host
+  keeps one persistent renderer per viewport, so a state change recomputes only the renderer's
+  dirty region and leaves the rest of the previous frame. Native text is layered above the
+  frame, which is the documented hybrid mode: self-drawn graphics
   plus native controls.
 - `android/app/src/main/assets/todo.opuir.json` is the exact output of
   `opuromc compile ../opurom-examples/todo.opu`; `verify.mjs` recompiles the source and compares
