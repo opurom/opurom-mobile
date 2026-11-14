@@ -309,8 +309,36 @@ pub extern "C" fn opu_renderer_frame(
                     Ok(inputs) => inputs,
                     Err(code) => return code,
                 };
-            let frame = owned.renderer.render_at(&ir, &state, SETTLED_MS);
+            let frame = owned
+                .renderer
+                .render_incremental_at(&ir, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Nodes and pixels the most recent `opu_renderer_frame` call recomputed via the
+/// incremental path (0 when it fell back to a full raster). Lets callers observe
+/// that a persistent renderer skips unchanged regions across successive frames.
+#[no_mangle]
+pub extern "C" fn opu_renderer_redraw_stats(
+    renderer: *mut OpuRenderer,
+    redrawn_nodes: *mut usize,
+    redraw_pixels: *mut u64,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() || redrawn_nodes.is_null() || redraw_pixels.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            let (nodes, pixels) = owned.renderer.redraw_stats();
+            unsafe {
+                *redrawn_nodes = nodes;
+                *redraw_pixels = pixels;
+            }
+            OPU_OK
         },
         OPU_ERR_PANIC,
     )

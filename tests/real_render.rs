@@ -248,6 +248,102 @@ fn one_renderer_serves_successive_frames() {
 }
 
 #[test]
+fn a_persistent_renderer_redraws_only_the_dirty_region_incrementally() {
+    // A persistent renderer reuses the previous frame, so after the first full
+    // raster a localized state change must recompute only the dirty region while
+    // producing byte-identical pixels to the full reference.
+    let handle = opu_renderer_new(STATE_WIDTH, STATE_HEIGHT);
+    assert!(!handle.is_null());
+    let mut first = vec![0u8; STATE_WIDTH as usize * STATE_HEIGHT as usize * 4];
+    let mut changed = vec![0u8; STATE_WIDTH as usize * STATE_HEIGHT as usize * 4];
+    let mut repeat = vec![0u8; STATE_WIDTH as usize * STATE_HEIGHT as usize * 4];
+
+    let mut nodes = 0usize;
+    let mut pixels = 0u64;
+    assert_eq!(
+        opu_renderer_frame(
+            handle,
+            TODO_IR.as_ptr(),
+            TODO_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            first.as_mut_ptr(),
+            STATE_WIDTH,
+            STATE_HEIGHT
+        ),
+        OPU_OK
+    );
+    // First frame is a full raster (no previous buffer to reuse).
+    assert_eq!(
+        opu_renderer_redraw_stats(handle, &mut nodes, &mut pixels),
+        OPU_OK
+    );
+    assert_eq!(
+        pixels,
+        (STATE_WIDTH * STATE_HEIGHT) as u64,
+        "first frame must full-raster"
+    );
+
+    assert_eq!(
+        opu_renderer_frame(
+            handle,
+            TODO_IR.as_ptr(),
+            TODO_IR.len(),
+            b"{\"remaining\":7}".as_ptr(),
+            15,
+            changed.as_mut_ptr(),
+            STATE_WIDTH,
+            STATE_HEIGHT
+        ),
+        OPU_OK
+    );
+    assert_eq!(
+        opu_renderer_redraw_stats(handle, &mut nodes, &mut pixels),
+        OPU_OK
+    );
+    assert_ne!(pixels, 0, "a changed frame must redraw something");
+    assert!(
+        pixels < (STATE_WIDTH * STATE_HEIGHT) as u64,
+        "incremental path must redraw fewer than the full frame ({pixels})"
+    );
+    assert_eq!(
+        digest_hex(&changed),
+        digest_hex(&reference(
+            TODO_IR,
+            r#"{"remaining":7}"#,
+            STATE_WIDTH,
+            STATE_HEIGHT
+        )),
+        "incremental pixels must equal the full reference"
+    );
+
+    // An unchanged re-render redraws nothing yet still returns the same frame.
+    assert_eq!(
+        opu_renderer_frame(
+            handle,
+            TODO_IR.as_ptr(),
+            TODO_IR.len(),
+            b"{\"remaining\":7}".as_ptr(),
+            15,
+            repeat.as_mut_ptr(),
+            STATE_WIDTH,
+            STATE_HEIGHT
+        ),
+        OPU_OK
+    );
+    assert_eq!(
+        opu_renderer_redraw_stats(handle, &mut nodes, &mut pixels),
+        OPU_OK
+    );
+    assert_eq!(pixels, 0, "an unchanged re-render must redraw nothing");
+    assert_eq!(digest_hex(&repeat), digest_hex(&changed));
+
+    unsafe {
+        drop(Box::from_raw(handle));
+    }
+}
+
+#[test]
 fn measured_per_frame_render_time_microseconds() {
     const FRAMES: usize = 24;
     let states = ["{}", r#"{"remaining":1}"#, r#"{"remaining":7}"#];
