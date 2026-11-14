@@ -30,7 +30,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
@@ -86,6 +88,14 @@ public final class MainActivity extends Activity {
     private int remaining = 3;
     private boolean dark;
 
+    // Multi-page routing: the pushed pages on top of the IR initialRoute. An
+    // empty stack means the frame renders the initial route; a single-page IR
+    // leaves initialRoute null and the stack is never used (frames unchanged).
+    // A pushed page is rendered as its own tree, so a push and the matching pop
+    // always reproduce the initial frame byte-for-byte.
+    private String initialRoute;
+    private final Deque<String> routeStack = new ArrayDeque<>();
+
     private ImageView frameView;
     private TextView remainingValue;
     private TextView statusValue;
@@ -134,6 +144,7 @@ public final class MainActivity extends Activity {
 
         System.loadLibrary("opurom_mobile");
         graphicsIr = resolveSystemMode(readAsset(selectedIrAsset()), dark);
+        initialRoute = OpuromNative.initialRoute(graphicsIr);
 
         getWindow().setStatusBarColor(brandBottom);
         getWindow().setNavigationBarColor(background);
@@ -495,7 +506,33 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(0, dp(52), 0.55f);
         resetLp.leftMargin = dp(12);
         bar.addView(reset, resetLp);
+
+        // Multi-page IR: a Detail control that pushes the first route other than
+        // the current page, mirroring a tap that yields a @nav push patch.
+        String detail = pushTarget();
+        if (detail != null) {
+            LinearLayout open = actionButton("Open " + detail, false);
+            ((TextView) open.getChildAt(0)).setText("⇢  " + detail.toUpperCase(java.util.Locale.ROOT));
+            open.setOnClickListener(view -> applyNav(detail));
+            LinearLayout.LayoutParams openLp = new LinearLayout.LayoutParams(0, dp(52), 0.7f);
+            openLp.leftMargin = dp(12);
+            bar.addView(open, openLp);
+        }
         return bar;
+    }
+
+    /** The first declared route that differs from the current page, or null for a single-page IR. */
+    private String pushTarget() {
+        if (initialRoute == null) return null;
+        String current = routeStack.peek();
+        String fallback = null;
+        for (int i = 0; ; i++) {
+            String name = OpuromNative.routeAt(graphicsIr, i);
+            if (name == null) break;
+            if (fallback == null) fallback = name;
+            if (!name.equals(current)) return name;
+        }
+        return fallback != null && !fallback.equals(current) ? fallback : null;
     }
 
     private void onRefresh() {
@@ -566,9 +603,22 @@ public final class MainActivity extends Activity {
                 rendererHeight = height;
             }
         }
-        int status = renderer != 0
-            ? OpuromNative.opuRendererFrame(renderer, graphicsIr, state, pixels, width, height)
-            : OpuromNative.opuFrameFromIr(graphicsIr, state, pixels, width, height);
+        int status;
+        if (initialRoute == null) {
+            // Single-page IR: byte-identical to the pre-routing path.
+            status = renderer != 0
+                ? OpuromNative.opuRendererFrame(renderer, graphicsIr, state, pixels, width, height)
+                : OpuromNative.opuFrameFromIr(graphicsIr, state, pixels, width, height);
+        } else {
+            // Multi-page IR: render the current page. A null route means the
+            // native side falls back to initialRoute, which is the current page
+            // while the pushed stack is empty.
+            byte[] route = currentRouteBytes();
+            status = renderer != 0
+                ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, state, route, pixels,
+                        width, height)
+                : OpuromNative.opuFrameFromIrRoute(graphicsIr, state, route, pixels, width, height);
+        }
         if (status != OpuromNative.OK) {
             throw new IllegalStateException("frame render failed with status " + status);
         }
@@ -599,6 +649,54 @@ public final class MainActivity extends Activity {
         if (measuredWidth <= 0 || measuredHeight <= 0) return;
         if (measuredWidth == lastMeasuredWidth && measuredHeight == lastMeasuredHeight) return;
         renderFrame();
+    }
+
+    // ------------------------------------------------------------------
+    // Route stack. Mirrors the renderer's reserved @nav patches: a route name
+    // pushes that page, ".." pops it. The root page (initialRoute) is never
+    // popped, so the stack bottoms out at the entry frame.
+    // ------------------------------------------------------------------
+
+    /** UTF-8 bytes of the current page key, or null to let native use initialRoute. */
+    private byte[] currentRouteBytes() {
+        String top = routeStack.peek();
+        return top == null ? null : top.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Applies one @nav value: a route name pushes, ".." pops. No-op on a single-page IR. */
+    private void applyNav(String value) {
+        if (initialRoute == null || value == null) return;
+        if ("..".equals(value)) {
+            popRoute();
+        } else {
+            pushRoute(value);
+        }
+    }
+
+    private void pushRoute(String name) {
+        routeStack.push(name);
+        renderFrame();
+        if (frameView != null) {
+            frameView.setAlpha(0.35f);
+            frameView.animate().alpha(1f).setDuration(280).start();
+        }
+    }
+
+    /** Pops one pushed page; returns false (and does nothing) at the root page. */
+    private boolean popRoute() {
+        if (routeStack.isEmpty()) {
+            return false;
+        }
+        routeStack.pop();
+        renderFrame();
+        return true;
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (!popRoute()) {
+            super.onBackPressed();
+        }
     }
 
     // ------------------------------------------------------------------

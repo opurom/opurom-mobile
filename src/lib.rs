@@ -318,6 +318,176 @@ pub extern "C" fn opu_renderer_frame(
     )
 }
 
+/// Selects the IR to render: the tree of `route` when the document declares
+/// routes, otherwise the document unchanged (single-page IR ignores `route`).
+fn route_ir<'a>(ir: &'a Ir, route: Option<&str>) -> Result<std::borrow::Cow<'a, Ir>, i32> {
+    match route {
+        Some(name) if !ir.routes.is_empty() => ir
+            .with_route(name)
+            .map(std::borrow::Cow::Owned)
+            .ok_or(OPU_ERR_IR),
+        _ => Ok(std::borrow::Cow::Borrowed(ir)),
+    }
+}
+
+/// Borrows an optional route key; `None` when the pointer is null or the span is empty.
+fn route_str<'a>(ptr: *const u8, len: usize) -> Result<Option<&'a str>, i32> {
+    if ptr.is_null() || len == 0 {
+        return Ok(None);
+    }
+    if len > OPU_MAX_JSON_BYTES || len > isize::MAX as usize {
+        return Err(OPU_ERR_IR);
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    std::str::from_utf8(bytes).map(Some).map_err(|_| OPU_ERR_IR)
+}
+
+/// Multi-page variant of `opu_frame_from_ir`: renders the tree of `route`
+/// (or the initial route when null/empty). A single-page IR ignores `route`.
+#[no_mangle]
+pub extern "C" fn opu_frame_from_ir_route(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    route: *const u8,
+    route_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || {
+            let (ir, state, byte_len) =
+                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
+                    Ok(inputs) => inputs,
+                    Err(code) => return code,
+                };
+            let active = match route_str(route, route_len).and_then(|r| route_ir(&ir, r)) {
+                Ok(active) => active,
+                Err(code) => return code,
+            };
+            let Ok(renderer) = Renderer::try_new(width, height) else {
+                return OPU_ERR_DIMENSION;
+            };
+            let pixels = renderer.pixels_at(&active, &state, SETTLED_MS);
+            write_pixels(&pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Multi-page variant of `opu_renderer_frame`: renders `route`'s tree through a
+/// reusable renderer. Error codes match `opu_frame_from_ir_route`.
+#[no_mangle]
+pub extern "C" fn opu_renderer_frame_route(
+    renderer: *mut OpuRenderer,
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    route: *const u8,
+    route_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            if (owned.width, owned.height) != (width, height) {
+                return OPU_ERR_DIMENSION;
+            }
+            let (ir, state, byte_len) =
+                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
+                    Ok(inputs) => inputs,
+                    Err(code) => return code,
+                };
+            let active = match route_str(route, route_len).and_then(|r| route_ir(&ir, r)) {
+                Ok(active) => active,
+                Err(code) => return code,
+            };
+            let frame = owned
+                .renderer
+                .render_incremental_at(&active, &state, SETTLED_MS);
+            write_pixels(&frame.pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Writes the IR's `initialRoute` (UTF-8, not NUL-terminated) into `out` and
+/// returns its length, or 0 for a single-page/unparsable IR or an oversized key.
+#[no_mangle]
+pub extern "C" fn opu_ir_initial_route(
+    ir_json: *const u8,
+    ir_len: usize,
+    out: *mut u8,
+    out_capacity: usize,
+) -> usize {
+    ffi_guard(
+        || {
+            if out.is_null() {
+                return 0;
+            }
+            let Ok(text) = json_str(ir_json, ir_len, OPU_ERR_IR) else {
+                return 0;
+            };
+            let Ok(ir) = parse_ir(text) else {
+                return 0;
+            };
+            let Some(route) = ir.initial_route else {
+                return 0;
+            };
+            let bytes = route.as_bytes();
+            if bytes.len() > out_capacity {
+                return 0;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
+            bytes.len()
+        },
+        0,
+    )
+}
+
+/// Writes the declared route name at `index` (sorted order) into `out` and
+/// returns its length, or 0 when the IR has fewer routes or cannot be parsed.
+#[no_mangle]
+pub extern "C" fn opu_ir_route_at(
+    ir_json: *const u8,
+    ir_len: usize,
+    index: u32,
+    out: *mut u8,
+    out_capacity: usize,
+) -> usize {
+    ffi_guard(
+        || {
+            if out.is_null() {
+                return 0;
+            }
+            let Ok(text) = json_str(ir_json, ir_len, OPU_ERR_IR) else {
+                return 0;
+            };
+            let Ok(ir) = parse_ir(text) else {
+                return 0;
+            };
+            let Some((name, _)) = ir.routes.iter().nth(index as usize) else {
+                return 0;
+            };
+            let bytes = name.as_bytes();
+            if bytes.len() > out_capacity {
+                return 0;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
+            bytes.len()
+        },
+        0,
+    )
+}
+
 /// Nodes and pixels the most recent `opu_renderer_frame` call recomputed via the
 /// incremental path (0 when it fell back to a full raster). Lets callers observe
 /// that a persistent renderer skips unchanged regions across successive frames.

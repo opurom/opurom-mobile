@@ -79,4 +79,45 @@ public final class OpuromNative {
     /** Renders IR plus state overrides with a one-shot renderer. */
     public static native int opuFrameFromIr(byte[] irJson, byte[] stateJson, byte[] out,
                                             int width, int height);
+
+    /**
+     * Multi-page render through a reusable renderer: renders the tree of {@code route}
+     * (UTF-8 page key, or {@code null} for the IR {@code initialRoute}). A single-page IR
+     * ignores {@code route} and renders exactly like {@link #opuRendererFrame}.
+     */
+    public static native int opuRendererFrameRoute(long renderer, byte[] irJson, byte[] stateJson,
+                                                   byte[] route, byte[] out, int width, int height);
+
+    /** One-shot multi-page render; see {@link #opuRendererFrameRoute}. */
+    public static native int opuFrameFromIrRoute(byte[] irJson, byte[] stateJson, byte[] route,
+                                                 byte[] out, int width, int height);
+
+    /** Writes the IR initial page key into {@code out}; returns its length, or 0 if single-page. */
+    private static native int opuIrInitialRoute(byte[] irJson, byte[] out);
+
+    /** Writes the route name at {@code index} (sorted) into {@code out}; returns its length, or 0. */
+    private static native int opuIrRouteAt(byte[] irJson, int index, byte[] out);
+
+    /** The IR {@code initialRoute} as a String, or {@code null} for a single-page document. */
+    public static String initialRoute(byte[] irJson) {
+        return routeAt(irJson, -1);
+    }
+
+    /**
+     * The declared route at {@code index} (sorted order), or the initialRoute for a negative
+     * {@code index}. Returns {@code null} for a single-page document or an out-of-range index.
+     */
+    public static String routeAt(byte[] irJson, int index) {
+        if (irJson == null) {
+            return null;
+        }
+        byte[] out = new byte[irJson.length];
+        int len = index < 0
+                ? opuIrInitialRoute(irJson, out)
+                : opuIrRouteAt(irJson, index, out);
+        if (len <= 0) {
+            return null;
+        }
+        return new String(out, 0, len, java.nio.charset.StandardCharsets.UTF_8);
+    }
 }

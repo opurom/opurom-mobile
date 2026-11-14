@@ -91,6 +91,44 @@ int32_t opu_renderer_frame(OpuRenderer *renderer,
                            const uint8_t *state_json, size_t state_len,
                            uint8_t *out, uint32_t width, uint32_t height);
 
+/*
+ * Multi-page variant of opu_frame_from_ir. When ir_json has a top-level "routes" map, the frame
+ * is the tree of route_name (a UTF-8, non-NUL-terminated page key). route_name == NULL or
+ * route_len == 0 selects the IR's "initialRoute"; an unknown route returns OPU_ERR_IR. A
+ * single-page IR (top-level "tree", no "routes") renders exactly like opu_frame_from_ir and
+ * ignores route_name. Error codes match opu_frame_from_ir.
+ */
+int32_t opu_frame_from_ir_route(const uint8_t *ir_json, size_t ir_len,
+                                const uint8_t *state_json, size_t state_len,
+                                const uint8_t *route, size_t route_len,
+                                uint8_t *out, uint32_t width, uint32_t height);
+
+/*
+ * Same as opu_frame_from_ir_route but reuses a renderer; width/height must equal the viewport
+ * passed to opu_renderer_new, and a null renderer returns OPU_ERR_NULL.
+ */
+int32_t opu_renderer_frame_route(OpuRenderer *renderer,
+                                 const uint8_t *ir_json, size_t ir_len,
+                                 const uint8_t *state_json, size_t state_len,
+                                 const uint8_t *route, size_t route_len,
+                                 uint8_t *out, uint32_t width, uint32_t height);
+
+/*
+ * Writes the IR's initial page key into out (UTF-8, not NUL-terminated) and returns the number of
+ * bytes written, or 0 when the IR is single-page, has no initialRoute, or cannot be parsed.
+ * out_capacity bounds the write; a key longer than the buffer returns 0.
+ */
+size_t opu_ir_initial_route(const uint8_t *ir_json, size_t ir_len,
+                            uint8_t *out, size_t out_capacity);
+
+/*
+ * Writes the declared route name at `index` (sorted order) into out (UTF-8, not NUL-terminated)
+ * and returns its length, or 0 when the IR has fewer routes or cannot be parsed. Lets a host
+ * enumerate the page set without parsing JSON.
+ */
+size_t opu_ir_route_at(const uint8_t *ir_json, size_t ir_len, uint32_t index,
+                       uint8_t *out, size_t out_capacity);
+
 #ifdef __cplusplus
 }
 #endif

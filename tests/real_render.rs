@@ -379,3 +379,165 @@ fn measured_per_frame_render_time_microseconds() {
     );
     assert!(micros > 0, "Instant must report a positive duration");
 }
+
+// A two-page document: the same routes contract the compiler emits. Home is the
+// initialRoute; Detail is a distinct tree so its frame differs in pixels.
+const TWO_ROUTE_IR: &str = r##"{
+  "ir": "0.1", "app": "Routes",
+  "state": [{"name": "count", "type": "int", "init": 0}],
+  "initialRoute": "Home",
+  "routes": {
+    "Home": {"tree": {"id": 0, "kind": "Column", "props": {"gap": 12, "padding": 16},
+      "children": [
+        {"id": 1, "kind": "Text", "props": {"value": "Home", "size": 28}, "children": [], "events": {}},
+        {"id": 2, "kind": "Text", "props": {"value": "count {count}", "size": 16}, "children": [], "events": {}}
+      ], "events": {}}, "title": "Home"},
+    "Detail": {"tree": {"id": 0, "kind": "Column", "props": {"gap": 12, "padding": 16},
+      "children": [
+        {"id": 1, "kind": "Text", "props": {"value": "Detail page", "size": 28}, "children": [], "events": {}},
+        {"id": 2, "kind": "Button", "props": {"label": "Open item", "variant": "primary"}, "children": [], "events": {}}
+      ], "events": {}}, "title": "Detail"}
+  },
+  "theme": {"mode": "light", "accent": "#097FEB", "radius": 8}
+}"##;
+
+fn render_route(
+    ir: &str,
+    state: &str,
+    route: Option<&str>,
+    width: u32,
+    height: u32,
+) -> (i32, Vec<u8>) {
+    let mut out = vec![0u8; width as usize * height as usize * 4];
+    let (route_ptr, route_len) = match route {
+        Some(name) => (name.as_ptr(), name.len()),
+        None => (ptr::null(), 0),
+    };
+    let status = opu_frame_from_ir_route(
+        ir.as_ptr(),
+        ir.len(),
+        state.as_ptr(),
+        state.len(),
+        route_ptr,
+        route_len,
+        out.as_mut_ptr(),
+        width,
+        height,
+    );
+    (status, out)
+}
+
+fn route_reference(ir: &str, state: &str, route: &str, width: u32, height: u32) -> Vec<u8> {
+    let parsed = parse_ir(ir).expect("fixture is valid IR");
+    let view = parse_state_json(&parsed, state).expect("fixture state is valid");
+    let route_ir = parsed.with_route(route).expect("route is declared");
+    Renderer::new(width, height).pixels_at(&route_ir, &view, SETTLED_MS)
+}
+
+#[test]
+fn initial_route_renders_home_first() {
+    // A null route selects the IR initialRoute, which is Home.
+    let (status, home) = render_route(TWO_ROUTE_IR, "{}", None, WIDTH, HEIGHT);
+    assert_eq!(status, OPU_OK);
+    assert_eq!(
+        digest_hex(&home),
+        digest_hex(&route_reference(TWO_ROUTE_IR, "{}", "Home", WIDTH, HEIGHT))
+    );
+    // The initialRoute query returns "Home".
+    let mut buf = [0u8; 32];
+    let n = opu_ir_initial_route(
+        TWO_ROUTE_IR.as_ptr(),
+        TWO_ROUTE_IR.len(),
+        buf.as_mut_ptr(),
+        buf.len(),
+    );
+    assert_eq!(&buf[..n], b"Home");
+}
+
+#[test]
+fn push_renders_detail_and_pop_returns_home() {
+    // Render the Home page (a push from the root leaves Home as the frame).
+    let (home_status, home) = render_route(TWO_ROUTE_IR, "{}", Some("Home"), WIDTH, HEIGHT);
+    assert_eq!(home_status, OPU_OK);
+
+    // Push Detail: the frame is Detail's own tree and differs from Home.
+    let (detail_status, detail) = render_route(TWO_ROUTE_IR, "{}", Some("Detail"), WIDTH, HEIGHT);
+    assert_eq!(detail_status, OPU_OK);
+    assert_eq!(
+        digest_hex(&detail),
+        digest_hex(&route_reference(
+            TWO_ROUTE_IR,
+            "{}",
+            "Detail",
+            WIDTH,
+            HEIGHT
+        ))
+    );
+    assert_ne!(home, detail, "Detail frame must differ from Home");
+
+    // Pop back to Home: the frame equals the first Home frame byte-for-byte.
+    let (popped_status, popped) = render_route(TWO_ROUTE_IR, "{}", Some("Home"), WIDTH, HEIGHT);
+    assert_eq!(popped_status, OPU_OK);
+    assert_eq!(home, popped, "pop must reproduce the initial Home frame");
+
+    // An undeclared route is a status value, never a panic.
+    let (bad_status, _) = render_route(TWO_ROUTE_IR, "{}", Some("Nope"), WIDTH, HEIGHT);
+    assert_eq!(bad_status, OPU_ERR_IR);
+}
+
+#[test]
+fn single_page_ir_ignores_route_and_matches_legacy() {
+    // A single-page IR carries no routes: a route name is ignored and the frame
+    // stays byte-identical to the legacy one-shot render.
+    let (legacy_status, legacy) = render(TODO_IR, "{}", WIDTH, HEIGHT);
+    assert_eq!(legacy_status, OPU_OK);
+    let (route_status, routed) = render_route(TODO_IR, "{}", Some("Detail"), WIDTH, HEIGHT);
+    assert_eq!(route_status, OPU_OK);
+    assert_eq!(legacy, routed, "single-page IR must ignore the route name");
+    let mut buf = [0u8; 32];
+    assert_eq!(
+        opu_ir_initial_route(TODO_IR.as_ptr(), TODO_IR.len(), buf.as_mut_ptr(), buf.len()),
+        0,
+        "single-page IR has no initialRoute"
+    );
+}
+
+#[test]
+fn reusable_renderer_serves_route_frames() {
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let mut home = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let mut detail = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let route = |name: &str, out: &mut [u8]| {
+        opu_renderer_frame_route(
+            handle,
+            TWO_ROUTE_IR.as_ptr(),
+            TWO_ROUTE_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            name.as_ptr(),
+            name.len(),
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(route("Home", &mut home), OPU_OK);
+    assert_eq!(route("Detail", &mut detail), OPU_OK);
+    assert_eq!(
+        digest_hex(&home),
+        digest_hex(&route_reference(TWO_ROUTE_IR, "{}", "Home", WIDTH, HEIGHT))
+    );
+    assert_ne!(home, detail);
+    // Enumerate the declared routes through the ABI (sorted: Detail, Home).
+    let mut buf = [0u8; 32];
+    let n = opu_ir_route_at(
+        TWO_ROUTE_IR.as_ptr(),
+        TWO_ROUTE_IR.len(),
+        0,
+        buf.as_mut_ptr(),
+        buf.len(),
+    );
+    assert_eq!(&buf[..n], b"Detail");
+    opu_renderer_free(handle);
+}
