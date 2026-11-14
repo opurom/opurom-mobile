@@ -1,0 +1,1891 @@
+{
+  "app": "Trackr",
+  "icons": [
+    {
+      "name": "calendar",
+      "paths": [
+        "M3.75 10H20.25M8 3V5M16 3V5M3.75 5H20.25V20H3.75V5Z"
+      ],
+      "viewBox": "0 0 24 24"
+    }
+  ],
+  "initialRoute": "Board",
+  "ir": "0.1",
+  "routes": {
+    "Board": {
+      "title": "Board",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 5,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#C7D2FE",
+                              "size": 13,
+                              "value": "Today"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 6,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#FFFFFF",
+                              "size": 26,
+                              "value": "My tasks"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 4,
+                        "kind": "Column",
+                        "props": {
+                          "gap": 4
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 7,
+                        "kind": "Spacer",
+                        "props": {
+                          "width": 1
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 10,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#FFFFFF",
+                                  "size": 20,
+                                  "value": "3/6"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 11,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#C7D2FE",
+                                  "size": 11,
+                                  "value": "completed"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 9,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 8,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 10
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 3,
+                    "kind": "Row",
+                    "props": {
+                      "align": "center",
+                      "gap": 12
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 2,
+                "kind": "Container",
+                "props": {
+                  "gradient": "#4F46E5,#3730A3",
+                  "padding": 18,
+                  "radius": 18,
+                  "shadow": 6
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {
+                      "tap": {
+                        "actions": [
+                          {
+                            "op": "set",
+                            "target": "boardSegment",
+                            "value": "All"
+                          },
+                          {
+                            "op": "set",
+                            "target": "showInsights",
+                            "value": false
+                          }
+                        ]
+                      }
+                    },
+                    "id": 13,
+                    "kind": "Button",
+                    "props": {
+                      "color": "#4F46E5",
+                      "label": "Tasks",
+                      "padding": 9,
+                      "radius": 12,
+                      "variant": "primary"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {
+                      "tap": {
+                        "actions": [
+                          {
+                            "op": "set",
+                            "target": "boardSegment",
+                            "value": "Insights"
+                          },
+                          {
+                            "op": "set",
+                            "target": "showInsights",
+                            "value": true
+                          }
+                        ]
+                      }
+                    },
+                    "id": 14,
+                    "kind": "Button",
+                    "props": {
+                      "color": "#EEF0FF",
+                      "label": "Insights",
+                      "padding": 9,
+                      "radius": 12,
+                      "variant": "secondary"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 12,
+                "kind": "Row",
+                "props": {
+                  "gap": 8
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 18,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#6B7280",
+                              "size": 12,
+                              "value": "Completion"
+                            },
+                            "when": "showInsights"
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 19,
+                            "kind": "Progress",
+                            "props": {
+                              "color": "#4F46E5",
+                              "value": 42
+                            },
+                            "when": "showInsights"
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 21,
+                                "kind": "Icon",
+                                "props": {
+                                  "color": "#16A34A",
+                                  "name": "check"
+                                },
+                                "when": "showInsights"
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 22,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#374151",
+                                  "size": 13,
+                                  "value": "3 of 6 tasks complete this sprint"
+                                },
+                                "when": "showInsights"
+                              }
+                            ],
+                            "events": {},
+                            "id": 20,
+                            "kind": "Row",
+                            "props": {
+                              "align": "center",
+                              "gap": 8
+                            },
+                            "when": "showInsights"
+                          }
+                        ],
+                        "events": {},
+                        "id": 17,
+                        "kind": "Column",
+                        "props": {
+                          "gap": 10
+                        },
+                        "when": "showInsights"
+                      }
+                    ],
+                    "events": {},
+                    "id": 16,
+                    "kind": "Card",
+                    "props": {
+                      "border": "#E4E7EE",
+                      "glass": true,
+                      "padding": 16,
+                      "radius": 16
+                    },
+                    "when": "showInsights"
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 26,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#6B7280",
+                                  "size": 11,
+                                  "value": "Focus time"
+                                },
+                                "when": "showInsights"
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 27,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 20,
+                                  "value": "4h 20m"
+                                },
+                                "when": "showInsights"
+                              }
+                            ],
+                            "events": {},
+                            "id": 25,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 4
+                            },
+                            "when": "showInsights"
+                          }
+                        ],
+                        "events": {},
+                        "id": 24,
+                        "kind": "Card",
+                        "props": {
+                          "border": "#E4E7EE",
+                          "padding": 14,
+                          "radius": 14
+                        },
+                        "when": "showInsights"
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 30,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#6B7280",
+                                  "size": 11,
+                                  "value": "Streak"
+                                },
+                                "when": "showInsights"
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 31,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 20,
+                                  "value": "12 days"
+                                },
+                                "when": "showInsights"
+                              }
+                            ],
+                            "events": {},
+                            "id": 29,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 4
+                            },
+                            "when": "showInsights"
+                          }
+                        ],
+                        "events": {},
+                        "id": 28,
+                        "kind": "Card",
+                        "props": {
+                          "border": "#E4E7EE",
+                          "padding": 14,
+                          "radius": 14
+                        },
+                        "when": "showInsights"
+                      }
+                    ],
+                    "events": {},
+                    "id": 23,
+                    "kind": "Row",
+                    "props": {
+                      "gap": 12
+                    },
+                    "when": "showInsights"
+                  },
+                  {
+                    "children": [],
+                    "events": {
+                      "tap": {
+                        "actions": [
+                          {
+                            "op": "set",
+                            "target": "showInsights",
+                            "value": false
+                          },
+                          {
+                            "op": "set",
+                            "target": "boardSegment",
+                            "value": "All"
+                          }
+                        ]
+                      }
+                    },
+                    "id": 32,
+                    "kind": "Button",
+                    "props": {
+                      "color": "#EEF0FF",
+                      "label": "View board",
+                      "padding": 10,
+                      "radius": 12
+                    },
+                    "when": "showInsights"
+                  }
+                ],
+                "events": {},
+                "id": 15,
+                "kind": "Column",
+                "props": {
+                  "gap": 12
+                },
+                "when": "showInsights"
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "done"
+                              }
+                            },
+                            "id": 36,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "done"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 38,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "{taskTitle}"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 39,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "Design the router"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 37,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 40,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "valueFrom": "taskTitle"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 41,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 35,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 42,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "reviewed"
+                              }
+                            },
+                            "id": 44,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "reviewed"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 46,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "Review route lowering"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 47,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "Design"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 45,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 48,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "value": "Review route lowering"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 49,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 43,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 50,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "tested"
+                              }
+                            },
+                            "id": 52,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "tested"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 54,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "Write cross-backend tests"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 55,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "QA"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 53,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 56,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "value": "Write cross-backend tests"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 57,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 51,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 58,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "navigated"
+                              }
+                            },
+                            "id": 60,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "navigated"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 62,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "Ship push/pop navigation"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 63,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "Design"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 61,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 64,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "value": "Ship push/pop navigation"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 65,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 59,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 66,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "polReady"
+                              }
+                            },
+                            "id": 68,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "polReady"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 70,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "Polish the demo"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 71,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "Design"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 69,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 72,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "value": "Polish the demo"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 73,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 67,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 74,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "op": "toggle",
+                                "target": "accReady"
+                              }
+                            },
+                            "id": 76,
+                            "kind": "Checkbox",
+                            "props": {
+                              "bind": "accReady"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 78,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#111827",
+                                  "size": 15,
+                                  "value": "Acceptance on every backend"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 79,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#9CA3AF",
+                                  "size": 11,
+                                  "value": "QA"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 77,
+                            "kind": "Column",
+                            "props": {
+                              "gap": 2
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 80,
+                            "kind": "Spacer",
+                            "props": {
+                              "width": 1
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {
+                              "tap": {
+                                "actions": [
+                                  {
+                                    "op": "set",
+                                    "target": "detailRef",
+                                    "value": "Acceptance on every backend"
+                                  },
+                                  {
+                                    "op": "push",
+                                    "target": "TaskDetail"
+                                  }
+                                ]
+                              }
+                            },
+                            "id": 81,
+                            "kind": "Button",
+                            "props": {
+                              "color": "#EEF0FF",
+                              "label": "Open",
+                              "padding": 8,
+                              "radius": 10
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 75,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12,
+                          "padding": 14
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 34,
+                    "kind": "Column",
+                    "props": {
+                      "gap": 0
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 33,
+                "kind": "Card",
+                "props": {
+                  "border": "#E4E7EE",
+                  "padding": 2,
+                  "radius": 16
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "editDraft",
+                        "value": ""
+                      },
+                      {
+                        "op": "set",
+                        "target": "editDraftNotes",
+                        "value": ""
+                      },
+                      {
+                        "op": "set",
+                        "target": "detailRef",
+                        "value": "New task"
+                      },
+                      {
+                        "op": "push",
+                        "target": "TaskEdit"
+                      }
+                    ]
+                  }
+                },
+                "id": 82,
+                "kind": "Button",
+                "props": {
+                  "color": "#4F46E5",
+                  "label": "Add task",
+                  "padding": 14,
+                  "radius": 14,
+                  "shadow": 5,
+                  "variant": "primary"
+                }
+              }
+            ],
+            "events": {},
+            "id": 1,
+            "kind": "Column",
+            "props": {
+              "gap": 16,
+              "padding": 16
+            }
+          }
+        ],
+        "events": {},
+        "id": 0,
+        "kind": "Scroll",
+        "props": {
+          "height": 640
+        }
+      }
+    },
+    "Insights": {
+      "title": "Insights",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "pop"
+                  }
+                },
+                "id": 117,
+                "kind": "Button",
+                "props": {
+                  "color": "#EEF0FF",
+                  "label": "Back",
+                  "padding": 8,
+                  "radius": 10
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 118,
+                "kind": "Text",
+                "props": {
+                  "color": "#111827",
+                  "size": 20,
+                  "value": "Insights"
+                }
+              }
+            ],
+            "events": {},
+            "id": 116,
+            "kind": "Row",
+            "props": {
+              "align": "center",
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 122,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#C7D2FE",
+                          "size": 12,
+                          "value": "Sprint progress"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 123,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "size": 24,
+                          "value": "3/6 done"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 121,
+                    "kind": "Column",
+                    "props": {
+                      "gap": 4
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 124,
+                    "kind": "Spacer",
+                    "props": {
+                      "width": 1
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 125,
+                    "kind": "Badge",
+                    "props": {
+                      "label": "50%"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 120,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 12
+                }
+              }
+            ],
+            "events": {},
+            "id": 119,
+            "kind": "Card",
+            "props": {
+              "gradient": "#4F46E5,#3730A3",
+              "padding": 18,
+              "radius": 16,
+              "shadow": 6
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 129,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#6B7280",
+                          "size": 12,
+                          "value": "Open"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 130,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#111827",
+                          "size": 22,
+                          "value": "3 tasks"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 131,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#F59E0B",
+                          "size": 11,
+                          "value": "half the backlog"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 128,
+                    "kind": "Column",
+                    "props": {
+                      "gap": 6
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 127,
+                "kind": "Card",
+                "props": {
+                  "border": "#E4E7EE",
+                  "padding": 16,
+                  "radius": 14
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 134,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#6B7280",
+                          "size": 12,
+                          "value": "Done"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 135,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#111827",
+                          "size": 22,
+                          "value": "3 tasks"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 136,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#16A34A",
+                          "size": 11,
+                          "value": "on schedule"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 133,
+                    "kind": "Column",
+                    "props": {
+                      "gap": 6
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 132,
+                "kind": "Card",
+                "props": {
+                  "border": "#E4E7EE",
+                  "padding": 16,
+                  "radius": 14
+                }
+              }
+            ],
+            "events": {},
+            "id": 126,
+            "kind": "Row",
+            "props": {
+              "gap": 12
+            }
+          },
+          {
+            "children": [],
+            "events": {
+              "tap": {
+                "actions": [
+                  {
+                    "op": "set",
+                    "target": "showInsights",
+                    "value": false
+                  },
+                  {
+                    "op": "set",
+                    "target": "boardSegment",
+                    "value": "All"
+                  },
+                  {
+                    "op": "pop"
+                  }
+                ]
+              }
+            },
+            "id": 137,
+            "kind": "Button",
+            "props": {
+              "color": "#EEF0FF",
+              "label": "Back to board",
+              "padding": 12,
+              "radius": 12
+            }
+          }
+        ],
+        "events": {},
+        "id": 115,
+        "kind": "Column",
+        "props": {
+          "gap": 16,
+          "padding": 16
+        }
+      }
+    },
+    "TaskDetail": {
+      "title": "TaskDetail",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "pop"
+                  }
+                },
+                "id": 85,
+                "kind": "Button",
+                "props": {
+                  "color": "#EEF0FF",
+                  "label": "Back",
+                  "padding": 8,
+                  "radius": 10
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 86,
+                "kind": "Text",
+                "props": {
+                  "color": "#111827",
+                  "size": 20,
+                  "value": "Task"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 87,
+                "kind": "Spacer",
+                "props": {
+                  "width": 1
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 88,
+                "kind": "Badge",
+                "props": {
+                  "label": "In progress"
+                }
+              }
+            ],
+            "events": {},
+            "id": 84,
+            "kind": "Row",
+            "props": {
+              "align": "center",
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 91,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#111827",
+                      "size": 22,
+                      "value": "{detailRef}"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 92,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#4B5563",
+                      "size": 13,
+                      "value": "{taskNotes}"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 93,
+                    "kind": "Divider",
+                    "props": {}
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 95,
+                        "kind": "Icon",
+                        "props": {
+                          "color": "#6B7280",
+                          "name": "calendar"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 96,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#6B7280",
+                          "size": 12,
+                          "value": "Due today"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 97,
+                        "kind": "Spacer",
+                        "props": {
+                          "width": 1
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 98,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#DC2626",
+                          "size": 12,
+                          "value": "High priority"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 94,
+                    "kind": "Row",
+                    "props": {
+                      "align": "center",
+                      "gap": 8
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 90,
+                "kind": "Column",
+                "props": {
+                  "gap": 10
+                }
+              }
+            ],
+            "events": {},
+            "id": 89,
+            "kind": "Card",
+            "props": {
+              "border": "#E4E7EE",
+              "glass": true,
+              "padding": 18,
+              "radius": 16
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 99,
+            "kind": "Text",
+            "props": {
+              "color": "#6B7280",
+              "size": 12,
+              "value": "Quick actions"
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "set",
+                    "target": "done",
+                    "value": true
+                  }
+                },
+                "id": 101,
+                "kind": "Button",
+                "props": {
+                  "color": "#DCFCE7",
+                  "label": "Mark done",
+                  "padding": 10,
+                  "radius": 12,
+                  "variant": "secondary"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "showInsights",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "boardSegment",
+                        "value": "Insights"
+                      },
+                      {
+                        "op": "pop"
+                      }
+                    ]
+                  }
+                },
+                "id": 102,
+                "kind": "Button",
+                "props": {
+                  "color": "#EEF0FF",
+                  "label": "Open insights",
+                  "padding": 10,
+                  "radius": 12,
+                  "variant": "secondary"
+                }
+              }
+            ],
+            "events": {},
+            "id": 100,
+            "kind": "Row",
+            "props": {
+              "gap": 10
+            }
+          },
+          {
+            "children": [],
+            "events": {
+              "tap": {
+                "actions": [
+                  {
+                    "op": "set",
+                    "target": "editDraft",
+                    "valueFrom": "detailRef"
+                  },
+                  {
+                    "op": "set",
+                    "target": "editDraftNotes",
+                    "valueFrom": "taskNotes"
+                  },
+                  {
+                    "op": "push",
+                    "target": "TaskEdit"
+                  }
+                ]
+              }
+            },
+            "id": 103,
+            "kind": "Button",
+            "props": {
+              "color": "#4F46E5",
+              "label": "Edit task",
+              "padding": 14,
+              "radius": 14,
+              "shadow": 5,
+              "variant": "primary"
+            }
+          }
+        ],
+        "events": {},
+        "id": 83,
+        "kind": "Column",
+        "props": {
+          "gap": 16,
+          "padding": 16
+        }
+      }
+    },
+    "TaskEdit": {
+      "title": "TaskEdit",
+      "tree": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "pop"
+                  }
+                },
+                "id": 106,
+                "kind": "Button",
+                "props": {
+                  "color": "#EEF0FF",
+                  "label": "Cancel",
+                  "padding": 8,
+                  "radius": 10
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 107,
+                "kind": "Text",
+                "props": {
+                  "color": "#111827",
+                  "size": 20,
+                  "value": "Edit task"
+                }
+              }
+            ],
+            "events": {},
+            "id": 105,
+            "kind": "Row",
+            "props": {
+              "align": "center",
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 110,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#6B7280",
+                      "size": 12,
+                      "value": "Title"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {
+                      "input": {
+                        "op": "set",
+                        "target": "editDraft"
+                      }
+                    },
+                    "id": 111,
+                    "kind": "Input",
+                    "props": {
+                      "bind": "editDraft",
+                      "maxLength": 60,
+                      "placeholder": "Task title"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 112,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#6B7280",
+                      "size": 12,
+                      "value": "Notes"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {
+                      "input": {
+                        "op": "set",
+                        "target": "editDraftNotes"
+                      }
+                    },
+                    "id": 113,
+                    "kind": "Input",
+                    "props": {
+                      "bind": "editDraftNotes",
+                      "placeholder": "What needs doing"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 109,
+                "kind": "Column",
+                "props": {
+                  "gap": 12
+                }
+              }
+            ],
+            "events": {},
+            "id": 108,
+            "kind": "Card",
+            "props": {
+              "border": "#E4E7EE",
+              "padding": 18,
+              "radius": 16
+            }
+          },
+          {
+            "children": [],
+            "events": {
+              "tap": {
+                "actions": [
+                  {
+                    "op": "set",
+                    "target": "taskTitle",
+                    "valueFrom": "editDraft"
+                  },
+                  {
+                    "op": "set",
+                    "target": "taskNotes",
+                    "valueFrom": "editDraftNotes"
+                  },
+                  {
+                    "op": "set",
+                    "target": "detailRef",
+                    "valueFrom": "editDraft"
+                  },
+                  {
+                    "op": "pop"
+                  }
+                ]
+              }
+            },
+            "id": 114,
+            "kind": "Button",
+            "props": {
+              "color": "#4F46E5",
+              "label": "Save task",
+              "padding": 14,
+              "radius": 14,
+              "shadow": 5,
+              "variant": "primary"
+            }
+          }
+        ],
+        "events": {},
+        "id": 104,
+        "kind": "Column",
+        "props": {
+          "gap": 16,
+          "padding": 16
+        }
+      }
+    }
+  },
+  "state": [
+    {
+      "init": "All",
+      "name": "boardSegment",
+      "type": "string"
+    },
+    {
+      "init": "Design the router",
+      "name": "taskTitle",
+      "type": "string"
+    },
+    {
+      "init": "Per-route trees, push/pop navigation, and one shared state.",
+      "name": "taskNotes",
+      "type": "string"
+    },
+    {
+      "init": "Design the router",
+      "name": "detailRef",
+      "type": "string"
+    },
+    {
+      "init": "",
+      "name": "editDraft",
+      "type": "string"
+    },
+    {
+      "init": "",
+      "name": "editDraftNotes",
+      "type": "string"
+    },
+    {
+      "init": false,
+      "name": "showInsights",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "done",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "reviewed",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "tested",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "navigated",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "polReady",
+      "type": "bool"
+    },
+    {
+      "init": false,
+      "name": "accReady",
+      "type": "bool"
+    }
+  ],
+  "theme": {
+    "accent": "#4F46E5",
+    "fontScale": 1.0,
+    "mode": "light",
+    "radius": 16,
+    "tokens": {
+      "stage": "#E7EAF3"
+    }
+  },
+  "transition": "slide"
+}
