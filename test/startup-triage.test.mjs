@@ -13,7 +13,7 @@ import test from 'node:test';
 
 import {
   EXPECTED_EXPORTS, layerLinkage, layerManifest, layerPackageAbi,
-  layerRuntimeContract, loadArtifact, readElf, triage,
+  layerRuntimeContract, loadArtifact, parseManifestText, readElf, triage,
 } from '../lib/startup-triage.mjs';
 
 const EM_AARCH64 = 183;
@@ -263,4 +263,32 @@ test('absent artifact layers self-skip with a concrete reason and a clean exit',
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// `aapt2 dump xmltree` prints a real packaged manifest as an indented tree of
+// `E:`/`A:` lines, not plain XML. parseManifestText normalises that shape so the
+// same layer checks apply to a built APK; this fixture mirrors aapt2's output.
+test('parseManifestText reads an aapt2 dump xmltree manifest', () => {
+  const aapt = [
+    'N: android=http://schemas.android.com/apk/res/android',
+    '  E: manifest (line=2)',
+    '    A: http://schemas.android.com/apk/res/android:versionCode(0x0101021b)=1',
+    '    A: http://schemas.android.com/apk/res/android:compileSdkVersion(0x01010572)=34 (Raw: "34")',
+    '    E: application (line=5)',
+    '      A: http://schemas.android.com/apk/res/android:name(0x01010003)="org.opurom.mobile.App" (Raw: "org.opurom.mobile.App")',
+    '      E: activity (line=6)',
+    '        A: http://schemas.android.com/apk/res/android:name(0x01010003)=".MainActivity" (Raw: ".MainActivity")',
+    '        A: http://schemas.android.com/apk/res/android:exported(0x01010010)=(type 0x12)0xffffffff',
+    '        E: intent-filter (line=7)',
+    '          E: action (line=8)',
+    '            A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.action.MAIN" (Raw: "android.intent.action.MAIN")',
+    '          E: category (line=9)',
+    '            A: http://schemas.android.com/apk/res/android:name(0x01010003)="android.intent.category.LAUNCHER" (Raw: "android.intent.category.LAUNCHER")',
+  ].join('\n');
+  const parsed = parseManifestText(aapt);
+  assert.equal(parsed.hasApplication, true);
+  assert.equal(parsed.applicationName, 'org.opurom.mobile.App');
+  assert.equal(parsed.hasLauncher, true);
+  assert.equal(parsed.targetSdk, 34, 'falls back to compileSdkVersion when targetSdk absent');
+  assert.equal(parsed.activityCount, 1);
 });
