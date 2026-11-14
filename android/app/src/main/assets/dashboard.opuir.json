@@ -1071,7 +1071,8 @@
                     "id": 73,
                     "kind": "Grid",
                     "props": {
-                      "columns": 4
+                      "columns": 4,
+                      "compactColumns": 4
                     }
                   }
                 ],
@@ -1186,7 +1187,8 @@
                     "id": 84,
                     "kind": "Grid",
                     "props": {
-                      "columns": 4
+                      "columns": 4,
+                      "compactColumns": 4
                     }
                   }
                 ],
@@ -1301,7 +1303,8 @@
                     "id": 95,
                     "kind": "Grid",
                     "props": {
-                      "columns": 4
+                      "columns": 4,
+                      "compactColumns": 4
                     }
                   }
                 ],
