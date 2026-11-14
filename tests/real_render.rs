@@ -114,7 +114,11 @@ fn malformed_ir_and_state_return_status_values() {
         assert_eq!(status, OPU_ERR_IR, "IR {bad_ir:?}");
         assert_eq!(out, vec![0u8; 8 * 8 * 4], "no bytes written on error");
     }
-    for bad_state in ["", "{", "[]", r#"{"missing":1}"#, r#"{"remaining":"x"}"#] {
+    // A name the IR no longer declares is ignored (fault isolation): the frame
+    // renders from the IR defaults instead of failing the call.
+    let (status, _) = render(TODO_IR, r#"{"missing":1}"#, 8, 8);
+    assert_eq!(status, OPU_OK, "undeclared override names are ignored");
+    for bad_state in ["", "{", "[]", r#"{"remaining":"x"}"#] {
         let (status, _) = render(TODO_IR, bad_state, 8, 8);
         assert_eq!(status, OPU_ERR_STATE, "state {bad_state:?}");
     }
