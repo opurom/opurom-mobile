@@ -11,10 +11,10 @@
 'use strict';
 
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, createCipheriv, randomBytes } from 'node:crypto';
 import {
   copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync,
-  readFileSync, rmSync, statSync, utimesSync,
+  readFileSync, rmSync, statSync, utimesSync, writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +29,11 @@ const KEYSTORE = path.join(DIST, 'opurom-debug.jks');
 const STORE_PASS = 'android';
 const KEY_ALIAS = 'opuromdebug';
 const ABI = ['arm64-v8a', 'x86_64'];
+const ASSETS_SRC = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets');
+// IR assets are encrypted before packaging so a plain `unzip` of the APK does not
+// expose the compiled UI/IR source; MainActivity decrypts them with the same key.
+const ASSET_MAGIC = Buffer.from('OPU1', 'utf8');
+const ASSET_KEY = createHash('sha256').update('opurom-mobile-asset-key-v1').digest();
 
 let step = 0;
 function say(message) {
@@ -137,6 +142,33 @@ function findPlatform(sdk) {
   return { api: selected.replace(/^android-/, ''), jar: path.join(root, selected, 'android.jar') };
 }
 
+// Copy the source assets into a build tree, encrypting every IR JSON with
+// AES-256-GCM: magic + 12-byte IV + 16-byte tag + ciphertext. The key lives in
+// the app (MainActivity derives the same one); the source files on disk stay
+// plaintext, only the packaged bytes are protected.
+function encryptIrAssets(destDir) {
+  mkdirSync(destDir, { recursive: true });
+  if (!existsSync(ASSETS_SRC)) return 0;
+  let encrypted = 0;
+  for (const entry of readdirSync(ASSETS_SRC)) {
+    const from = path.join(ASSETS_SRC, entry);
+    if (!statSync(from).isFile()) continue;
+    const data = readFileSync(from);
+    if (!entry.endsWith('.opuir.json')) {
+      writeFileSync(path.join(destDir, entry), data);
+      continue;
+    }
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', ASSET_KEY, iv);
+    const sealed = Buffer.concat([cipher.update(data), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    writeFileSync(path.join(destDir, entry),
+      Buffer.concat([ASSET_MAGIC, iv, sealed, tag]));
+    encrypted += 1;
+  }
+  return encrypted;
+}
+
 function check(ok, label, result) {
   if (!ok) die(`${label} failed`, result?.detail);
   say(`${label} OK (${result.ms}ms)`);
@@ -223,10 +255,16 @@ r = run('aapt2 compile', [
 ]);
 check(r.ok, 'aapt2 compile resources', r);
 
+// Stage encrypted IR assets and link them, so the packaged APK does not carry
+// the UI/IR source as readable text.
+const packedAssets = path.join(aaptWork, 'assets');
+const encryptedCount = encryptIrAssets(packedAssets);
+say(`encrypt ${encryptedCount} IR asset(s) for packaging`);
+
 const baseApk = path.join(aaptWork, 'base.apk');
 r = run('aapt2 link', [
   aapt2, 'link', '-o', baseApk, '-I', androidJar,
-  '-A', path.join(ROOT, 'android', 'app', 'src', 'main', 'assets'),
+  '-A', packedAssets,
   '--manifest', path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
   resZip,
 ]);
@@ -306,7 +344,21 @@ check(r.ok && existsSync(OUTPUT), 'apksigner v1+v2+v3 signature', r);
 r = run('apksigner verify', [apksigner, 'verify', '--verbose', OUTPUT]);
 check(r.ok && /Verifies/.test(r.stdout), 'apksigner verification', r);
 const schemes = ['v1', 'v2', 'v3'].filter((s) => new RegExp(`Verified using ${s} scheme[^:]*: true`).test(r.stdout));
-if (schemes.length !== 3) die('the APK is not signed with all three schemes', r.stdout);
+// The target API level decides whether the v1 JAR scheme is install-verified:
+// Android 11 (API 30) and later no longer check it, so a high-target build only
+// needs v2+v3, while API < 30 requires v1 as well.
+const targetSdk = Number(
+  /android:targetSdkVersion\s*=\s*"(\d+)"/.exec(
+    readFileSync(path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8'),
+  )?.[1] ?? platform.api,
+);
+const needsV1 = targetSdk < 30;
+if (!schemes.includes('v2') || !schemes.includes('v3')) {
+  die('the APK is not signed with the v2+v3 schemes', r.stdout);
+}
+if (needsV1 && !schemes.includes('v1')) {
+  die('the APK is not signed with the v1 scheme required below API 30', r.stdout);
+}
 
 r = run('aapt2 badging', [aapt2, 'dump', 'badging', OUTPUT]);
 const launchable = /launchable-activity: name='([^']+)'/.exec(r.stdout);

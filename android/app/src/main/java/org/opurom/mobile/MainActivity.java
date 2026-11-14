@@ -29,6 +29,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Arrays;
+
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * OPUROM Android host: a native adaptive shell around one self-drawn OPUROM
@@ -42,6 +48,15 @@ public final class MainActivity extends Activity {
 
     private static final String GRAPHICS_IR = "dashboard.opuir.json";
     private static final int MAX_FRAME_PIXELS = 1024;
+
+    // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
+    // is not readable as plain text from an unpacked APK. The key is derived
+    // from a fixed application secret; a determined attacker can still reach the
+    // packaged bytes, but the asset is no longer plain text.
+    private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
+    private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
+    private static final int GCM_IV_BYTES = 12;
+    private static final int GCM_TAG_BITS = 128;
 
     // Column breakpoints mirror the renderer's width tiers: the shell and the
     // software renderer reflow at the same logical-pixel boundaries.
@@ -402,6 +417,7 @@ public final class MainActivity extends Activity {
 
     private View buildTaskCard() {
         LinearLayout box = paddedCard();
+        taskCard = box;
         taskRows = column(0);
         for (int i = 0; i < TASKS.length; i++) {
             taskRows.addView(buildTaskRow(i));
@@ -756,9 +772,47 @@ public final class MainActivity extends Activity {
             while ((count = input.read(chunk)) != -1) {
                 bytes.write(chunk, 0, count);
             }
-            return bytes.toByteArray();
+            return unseal(bytes.toByteArray(), name);
         } catch (IOException error) {
             throw new IllegalStateException("cannot read IR asset " + name, error);
         }
+    }
+
+    // Sealed assets carry the magic, a 12-byte IV and a GCM tag; the tag is the
+    // final 16 bytes of the blob handed to doFinal so tampering fails loudly.
+    private static byte[] unseal(byte[] data, String name) {
+        if (data.length < ASSET_MAGIC.length + GCM_IV_BYTES + GCM_TAG_BITS / 8
+                || !startsWith(data, ASSET_MAGIC)) {
+            return data;
+        }
+        try {
+            byte[] iv = Arrays.copyOfRange(data, ASSET_MAGIC.length,
+                ASSET_MAGIC.length + GCM_IV_BYTES);
+            byte[] blob = Arrays.copyOfRange(data,
+                ASSET_MAGIC.length + GCM_IV_BYTES, data.length);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(ASSET_KEY, "AES"),
+                new GCMParameterSpec(GCM_TAG_BITS, iv));
+            return cipher.doFinal(blob);
+        } catch (Exception error) {
+            throw new IllegalStateException("cannot unseal IR asset " + name, error);
+        }
+    }
+
+    private static byte[] digestKey(String secret) {
+        try {
+            return MessageDigest.getInstance("SHA-256")
+                .digest(secret.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception error) {
+            throw new IllegalStateException("asset key digest unavailable", error);
+        }
+    }
+
+    private static boolean startsWith(byte[] data, byte[] prefix) {
+        if (data.length < prefix.length) return false;
+        for (int i = 0; i < prefix.length; i += 1) {
+            if (data[i] != prefix[i]) return false;
+        }
+        return true;
     }
 }
