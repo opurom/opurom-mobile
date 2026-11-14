@@ -38,7 +38,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * OPUROM Android host: a native adaptive shell around one self-drawn OPUROM
- * frame. The frame renders graphics (gradient, particles, cards) through JNI;
+ * frame. The frame renders graphics (glass, particles, cards) through JNI;
  * all typography and controls are native widgets so text uses the platform
  * typeface at every density. The shell reflows from one column on a phone to
  * two columns on a tablet and a navigation rail plus content plus detail
@@ -118,6 +118,10 @@ public final class MainActivity extends Activity {
     private int muted;
     private int divider;
     private int accent;
+    private int brandTop;
+    private int brandBottom;
+    private int onBrand;
+    private int positive;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,7 +133,7 @@ public final class MainActivity extends Activity {
         System.loadLibrary("opurom_mobile");
         graphicsIr = readAsset(selectedIrAsset());
 
-        getWindow().setStatusBarColor(dark ? 0xFF0B1220 : 0xFF097FEB);
+        getWindow().setStatusBarColor(brandBottom);
         getWindow().setNavigationBarColor(background);
         requestHighestRefreshRate();
 
@@ -178,22 +182,18 @@ public final class MainActivity extends Activity {
     }
 
     private View buildHeader() {
-        GradientDrawable bg = new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xFF097FEB, 0xFF5B4BEF});
-        bg.setCornerRadius(dp(22));
-
+        GradientDrawable bg = lamina(22, 0x33FFFFFF);
         LinearLayout header = column(dp(20));
         header.setBackground(bg);
-        header.setElevation(dp(10));
+        header.setElevation(dp(8));
 
         TextView brand = label("OPUROM", 24, Typeface.create("sans-serif-medium", Typeface.NORMAL),
-                0xFFFFFFFF);
+                onBrand);
         brand.setLetterSpacing(0.09f);
         header.addView(brand);
 
         TextView subtitle = label("Field Service  ·  one IR, every screen", 13,
-                Typeface.create("sans-serif", Typeface.NORMAL), 0xCCFFFFFF);
+                Typeface.create("sans-serif", Typeface.NORMAL), 0xCCEAF6F2);
         subtitle.setPadding(0, dp(4), 0, 0);
         subtitle.setLetterSpacing(0.02f);
         header.addView(subtitle);
@@ -201,8 +201,8 @@ public final class MainActivity extends Activity {
         LinearLayout badgeRow = new LinearLayout(this);
         badgeRow.setOrientation(LinearLayout.HORIZONTAL);
         badgeRow.setPadding(0, dp(14), 0, 0);
-        badgeRow.addView(pill("LIVE RENDERER", 0x33FFFFFF, 0xFFFFFFFF));
-        badgeRow.addView(pill("v0.1 IR", 0x22000000, 0xDDFFFFFF));
+        badgeRow.addView(pill("LIVE RENDERER", 0x2BFFFFFF, onBrand));
+        badgeRow.addView(pill("v0.1 IR", 0x1A000000, 0xCCEAF6F2));
         header.addView(badgeRow);
 
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -241,7 +241,7 @@ public final class MainActivity extends Activity {
     private LinearLayout rendererColumn() {
         LinearLayout column = cardColumn();
         column.addView(sectionTitle("Renderer output"));
-        column.addView(sectionCaption("Self-drawn RGBA frame · gradient, particles, cards"));
+        column.addView(sectionCaption("Self-drawn RGBA frame · glass, particles, cards"));
         column.addView(buildFrameCard());
         return column;
     }
@@ -286,17 +286,14 @@ public final class MainActivity extends Activity {
 
     private LinearLayout buildNavRail() {
         LinearLayout rail = column(0);
-        GradientDrawable railCard = new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xFF2A5BD7, 0xFF123C8C});
-        railCard.setCornerRadius(dp(16));
+        GradientDrawable railCard = lamina(16, 0x2BFFFFFF);
 
         LinearLayout headerCard = column(dp(16));
         headerCard.setBackground(railCard);
         headerCard.addView(label("Navigation", 16,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFFFFFFFF));
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), onBrand));
         TextView subtitle = label("one IR, every screen", 11,
-                Typeface.create("sans-serif", Typeface.NORMAL), 0xC9DCFF);
+                Typeface.create("sans-serif", Typeface.NORMAL), 0xCCEAF6F2);
         subtitle.setPadding(0, dp(4), 0, 0);
         headerCard.addView(subtitle);
         LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
@@ -328,13 +325,15 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshNavRow(LinearLayout row, boolean active) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(active ? accent : card);
-        shape.setCornerRadius(dp(14));
-        shape.setStroke(1, active ? card : divider);
+        GradientDrawable shape = active ? lamina(14, 0x2BFFFFFF) : new GradientDrawable();
+        if (!active) {
+            shape.setColor(card);
+            shape.setCornerRadius(dp(14));
+            shape.setStroke(1, divider);
+        }
         row.setBackground(shape);
         TextView textView = (TextView) row.getChildAt(0);
-        textView.setTextColor(active ? 0xFFFFFFFF : text);
+        textView.setTextColor(active ? onBrand : text);
     }
 
     private LinearLayout.LayoutParams weighted(float weight) {
@@ -386,7 +385,7 @@ public final class MainActivity extends Activity {
         // it: deep ink on the surface keeps the hybrid caption readable over
         // any rendered background without overlapping the frame's own text.
         TextView caption = label("OPUROM / NATIVE HYBRID", 11,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFF5A6478);
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), muted);
         caption.setLetterSpacing(0.14f);
         LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -416,9 +415,8 @@ public final class MainActivity extends Activity {
         barLp.topMargin = dp(16);
         box.addView(bar, barLp);
 
-        GradientDrawable progress = new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{0xFF097FEB, 0xFF5B4BEF});
+        GradientDrawable progress = new GradientDrawable();
+        progress.setColor(accent);
         progress.setCornerRadius(dp(6));
         View fill = new View(this);
         fill.setBackground(progress);
@@ -426,7 +424,7 @@ public final class MainActivity extends Activity {
         box.addView(fill, fillLp);
 
         statusValue = label("SYNCED  ·  frame deterministic", 12,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFF137A4B);
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), positive);
         statusValue.setPadding(0, dp(12), 0, 0);
         statusValue.setLetterSpacing(0.03f);
         box.addView(statusValue);
@@ -452,7 +450,7 @@ public final class MainActivity extends Activity {
 
         TextView marker = label(done[index] ? "✓" : "○", 18,
                 Typeface.create("sans-serif-medium", Typeface.NORMAL),
-                done[index] ? 0xFF137A4B : muted);
+                done[index] ? positive : muted);
         marker.setMinWidth(dp(30));
         row.addView(marker);
 
@@ -467,7 +465,7 @@ public final class MainActivity extends Activity {
             done[i] = !done[i];
             TextView m = (TextView) ((LinearLayout) view).getChildAt(0);
             m.setText(done[i] ? "✓" : "○");
-            m.setTextColor(done[i] ? 0xFF137A4B : muted);
+            m.setTextColor(done[i] ? positive : muted);
             animatePress(m);
         });
         return row;
@@ -482,16 +480,15 @@ public final class MainActivity extends Activity {
         lp.topMargin = dp(2);
         bar.setLayoutParams(lp);
 
-        LinearLayout refresh = actionButton("Refresh", 0xFF097FEB, 0xFF5B4BEF);
+        LinearLayout refresh = actionButton("Refresh", true);
         refreshGlyph = (TextView) refresh.getChildAt(0);
         refreshGlyph.setText("⟳  REFRESH");
         refresh.setOnClickListener(view -> onRefresh());
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
         bar.addView(refresh, refreshLp);
 
-        LinearLayout reset = actionButton("Reset", card, card);
+        LinearLayout reset = actionButton("Reset", false);
         ((TextView) reset.getChildAt(0)).setText("RESET");
-        ((TextView) reset.getChildAt(0)).setTextColor(accent);
         reset.setOnClickListener(view -> onReset());
         LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(0, dp(52), 0.55f);
         resetLp.leftMargin = dp(12);
@@ -618,22 +615,22 @@ public final class MainActivity extends Activity {
                 }).start();
     }
 
-    private LinearLayout actionButton(String name, int start, int end) {
-        GradientDrawable shape = new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT, new int[]{start, end});
-        shape.setCornerRadius(dp(14));
-        GradientDrawable pressed = new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT, new int[]{start, end});
-        pressed.setCornerRadius(dp(14));
-        pressed.setAlpha(210);
+    private LinearLayout actionButton(String name, boolean primary) {
+        GradientDrawable shape = primary ? lamina(14, 0x2BFFFFFF) : new GradientDrawable();
+        if (!primary) {
+            shape.setColor(card);
+            shape.setCornerRadius(dp(14));
+            shape.setStroke(1, divider);
+        }
         RippleDrawable ripple = new RippleDrawable(
-                ColorStateList.valueOf(0x66FFFFFF), shape, shape);
+                ColorStateList.valueOf(primary ? 0x33FFFFFF : 0x1A0F766E), shape, shape);
         LinearLayout button = new LinearLayout(this);
         button.setBackground(ripple);
         button.setGravity(Gravity.CENTER);
-        button.setElevation(dp(6));
+        button.setElevation(dp(primary ? 6 : 2));
         TextView text = label(name.toUpperCase(), 13,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFFFFFFFF);
+                Typeface.create("sans-serif-medium", Typeface.NORMAL),
+                primary ? onBrand : accent);
         text.setLetterSpacing(0.08f);
         button.addView(text);
         button.setOnTouchListener((view, event) -> {
@@ -702,19 +699,28 @@ public final class MainActivity extends Activity {
     // ------------------------------------------------------------------
     private void resolvePalette() {
         if (dark) {
-            background = 0xFF0B1220;
-            card = 0xFF16223A;
-            text = 0xFFF2F6FF;
-            muted = 0xFF98A6C0;
-            divider = 0xFF2A3A57;
+            background = 0xFF101A19;
+            card = 0xFF182826;
+            text = 0xFFE8F2EF;
+            muted = 0xFF94ABA5;
+            divider = 0xFF2C4540;
+            accent = 0xFF5FC2AE;
+            brandTop = 0xFF1D4A42;
+            brandBottom = 0xFF12332E;
+            onBrand = 0xFFEAF6F2;
+            positive = 0xFF7BD7B4;
         } else {
-            background = 0xFFF4F7FC;
-            card = 0xFFFFFFFF;
-            text = 0xFF101828;
-            muted = 0xFF667085;
-            divider = 0xFFDCE5F2;
+            background = 0xFFEDF2EF;
+            card = 0xFFFBFCFB;
+            text = 0xFF152A26;
+            muted = 0xFF5C716B;
+            divider = 0xFFD5E2DC;
+            accent = 0xFF0F766E;
+            brandTop = 0xFF155E52;
+            brandBottom = 0xFF0E423A;
+            onBrand = 0xFFF2FBF8;
+            positive = 0xFF137A4B;
         }
-        accent = 0xFF097FEB;
     }
 
     private LinearLayout column(int pad) {
@@ -728,6 +734,19 @@ public final class MainActivity extends Activity {
         LinearLayout layout = column(0);
         layout.setOrientation(LinearLayout.VERTICAL);
         return layout;
+    }
+
+    /* A Liquid Glass lamina: one hue, a lighter top edge and a deeper interior,
+     * with a hairline specular stroke. Android Views have no backdrop filter, so
+     * the sheen is baked into a single-hue vertical wash instead of a clashing
+     * two-colour gradient. */
+    private GradientDrawable lamina(int radiusDp, int edgeColor) {
+        GradientDrawable shape = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{brandTop, brandBottom});
+        shape.setCornerRadius(dp(radiusDp));
+        shape.setStroke(1, edgeColor);
+        return shape;
     }
 
     private LinearLayout paddedCard() {

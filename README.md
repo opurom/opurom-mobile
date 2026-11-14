@@ -377,10 +377,13 @@ exported from each `.so`.
 - `android/app/src/main/AndroidManifest.xml` declares `org.opurom.mobile.MainActivity` as the
   launcher activity.
 - `android/app/src/main/java/org/opurom/mobile/MainActivity.java` builds the adaptive native
-  shell: a gradient header, session and task cards, and a Refresh/Reset action bar. All
-  typography uses platform typefaces at density-independent sizes, with a dark palette selected
-  from `uiMode`. Refresh rotates its glyph, fades the counter, re-renders the frame and crossfades
-  it; Reset restores the initial state. Every button has a ripple and a press-scale animator.
+  shell: a single-hue glass lamina header, session and task cards, and a Refresh/Reset action
+  bar. The light and dark palettes share one deep-green brand hue and a teal accent; every
+  surface and text colour comes from that palette, so no two-colour gradients are baked into
+  the chrome. Light and dark values are selected from `uiMode`. All typography uses platform
+  typefaces at density-independent sizes. Refresh rotates its glyph, fades the counter,
+  re-renders the frame and crossfades it; Reset restores the initial state. Every button has a
+  ripple and a press-scale animator.
 - The shell reflows from three width tiers, and the breakpoints are the renderer's own logical
   pixel boundaries. Below `600 dp` the shell is a single scrollable column; at `600 dp` and
   above it splits into two columns; at `1200 dp` and above it becomes a three-column workbench
