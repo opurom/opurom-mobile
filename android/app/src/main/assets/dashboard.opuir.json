@@ -1,32 +1,1526 @@
 {
+  "api": [
+    {
+      "handlers": [
+        "list",
+        "create"
+      ],
+      "model": "DeployRecord",
+      "path": "/dashboard/deploys"
+    },
+    {
+      "handlers": [
+        "list"
+      ],
+      "model": "ServiceTarget",
+      "path": "/dashboard/services"
+    }
+  ],
+  "app": "Dashboard",
+  "computed": [
+    {
+      "expr": "doneTasks - openTasks",
+      "name": "throughput",
+      "type": "int"
+    },
+    {
+      "expr": "100 - errorRate",
+      "name": "health",
+      "type": "int"
+    }
+  ],
+  "imports": [
+    "models/metrics.opu",
+    "views/cards.opu"
+  ],
   "ir": "0.1",
-  "app": "OPUROM Dashboard",
-  "state": [{ "name": "remaining", "type": "int", "init": 3 }],
-  "theme": { "mode": "light", "accent": "#097FEB", "radius": 14 },
+  "models": [
+    {
+      "fields": [
+        {
+          "default": null,
+          "name": "id",
+          "primary": true,
+          "type": "int"
+        },
+        {
+          "default": null,
+          "name": "name",
+          "primary": false,
+          "type": "string"
+        },
+        {
+          "default": null,
+          "name": "owner",
+          "primary": false,
+          "type": "string"
+        },
+        {
+          "default": false,
+          "name": "done",
+          "primary": false,
+          "type": "bool"
+        }
+      ],
+      "name": "DeployRecord"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "name": "id",
+          "primary": true,
+          "type": "int"
+        },
+        {
+          "default": null,
+          "name": "region",
+          "primary": false,
+          "type": "string"
+        },
+        {
+          "default": true,
+          "name": "healthy",
+          "primary": false,
+          "type": "bool"
+        }
+      ],
+      "name": "ServiceTarget"
+    }
+  ],
+  "state": [
+    {
+      "init": 128,
+      "name": "openTasks",
+      "type": "int"
+    },
+    {
+      "init": 964,
+      "name": "doneTasks",
+      "type": "int"
+    },
+    {
+      "init": 72,
+      "name": "deployRate",
+      "type": "int"
+    },
+    {
+      "init": 3,
+      "name": "errorRate",
+      "type": "int"
+    },
+    {
+      "init": "Atlas",
+      "name": "crew",
+      "type": "string"
+    },
+    {
+      "init": "live",
+      "name": "liveFeed",
+      "type": "string"
+    },
+    {
+      "init": 2,
+      "name": "incidents",
+      "type": "int"
+    },
+    {
+      "init": true,
+      "name": "scalingEnabled",
+      "type": "bool"
+    },
+    {
+      "init": "24h",
+      "name": "window",
+      "type": "string"
+    },
+    {
+      "init": true,
+      "name": "autoscaling",
+      "type": "bool"
+    },
+    {
+      "init": true,
+      "name": "alerts",
+      "type": "bool"
+    },
+    {
+      "init": 64,
+      "name": "load",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "refreshed",
+      "type": "int"
+    },
+    {
+      "init": 836,
+      "name": "throughput",
+      "type": "int"
+    },
+    {
+      "init": 97,
+      "name": "health",
+      "type": "int"
+    }
+  ],
+  "theme": {
+    "accent": "#0F766E",
+    "fontScale": 1.0,
+    "mode": "light",
+    "radius": 14
+  },
   "tree": {
-    "id": 0, "kind": "Column", "props": { "gap": 12, "padding": 18, "color": "#F4F7FC" },
     "children": [
       {
-        "id": 1, "kind": "Container",
-        "props": { "width": 420, "height": 62, "radius": 14, "gradient": "#097FEB,#5B4BEF", "shadow": 6, "color": "#097FEB" },
-        "children": [], "events": {}
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 3,
+                "kind": "Text",
+                "props": {
+                  "color": "#FFFFFF",
+                  "size": 26,
+                  "value": "Telemetry Console"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 4,
+                "kind": "Text",
+                "props": {
+                  "color": "#CFF3EE",
+                  "size": 12,
+                  "value": "crew {crew} - feed {liveFeed} - {window} window"
+                }
+              }
+            ],
+            "events": {},
+            "id": 2,
+            "kind": "Column",
+            "props": {
+              "color": "#0F766E",
+              "gap": 4
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Container",
+        "props": {
+          "gradient": "#0F766E,#053D38",
+          "height": 92,
+          "padding": 20,
+          "particles": {
+            "alpha": 760,
+            "color": "#CFF3EE",
+            "count": 40,
+            "radius": 2,
+            "seed": 13
+          },
+          "shadow": 4
+        }
       },
       {
-        "id": 2, "kind": "Container",
-        "props": { "width": 420, "height": 88, "radius": 12, "color": "#FFFFFF", "border": "#DCE5F2", "shadow": 4,
-                   "particles": { "count": 56, "seed": 7, "radius": 2, "alpha": 460, "color": "#097FEB" } },
-        "children": [], "events": {}
-      },
-      {
-        "id": 3, "kind": "Container",
-        "props": { "width": 196, "height": 50, "radius": 10, "color": "#E8F2FF", "border": "#B9D6FA", "shadow": 2 },
-        "children": [], "events": {}
-      },
-      {
-        "id": 4, "kind": "Container",
-        "props": { "width": 196, "height": 50, "radius": 10, "gradient": "#D8F7E5,#EAFBF1", "border": "#B7E7C9", "shadow": 2, "color": "#EAFBF1" },
-        "children": [], "events": {}
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 11,
+                                "kind": "Icon",
+                                "props": {
+                                  "color": "#0F766E",
+                                  "name": "settings"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 10,
+                            "kind": "Container",
+                            "props": {
+                              "color": "#EAF6F4",
+                              "height": 22,
+                              "radius": 6,
+                              "width": 22
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 12,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 16,
+                              "value": "Filters"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 9,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 8
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {
+                          "input": {
+                            "op": "set",
+                            "target": "window"
+                          }
+                        },
+                        "id": 13,
+                        "kind": "Input",
+                        "props": {
+                          "bind": "window",
+                          "placeholder": "time window"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {
+                          "input": {
+                            "op": "set",
+                            "target": "load"
+                          }
+                        },
+                        "id": 14,
+                        "kind": "Slider",
+                        "props": {
+                          "bind": "load",
+                          "max": 100,
+                          "min": 0
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 15,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#4B6B67",
+                          "size": 12,
+                          "value": "load {load}%"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {
+                          "tap": {
+                            "op": "toggle",
+                            "target": "autoscaling"
+                          }
+                        },
+                        "id": 16,
+                        "kind": "Switch",
+                        "props": {
+                          "bind": "autoscaling"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 17,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#4B6B67",
+                          "size": 12,
+                          "value": "autoscaling on"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {
+                          "tap": {
+                            "op": "toggle",
+                            "target": "alerts"
+                          }
+                        },
+                        "id": 18,
+                        "kind": "Switch",
+                        "props": {
+                          "bind": "alerts"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 19,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#4B6B67",
+                          "size": 12,
+                          "value": "alerts on"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 8,
+                    "kind": "Column",
+                    "props": {
+                      "color": "#FFFFFF",
+                      "gap": 10
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 7,
+                "kind": "Card",
+                "props": {
+                  "border": "#D7E3E0",
+                  "color": "#FFFFFF",
+                  "padding": 16,
+                  "radius": 14,
+                  "shadow": 3
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 22,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#4B6B67",
+                          "size": 12,
+                          "value": "Refreshed"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 23,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#0B2E2A",
+                          "size": 18,
+                          "value": "{refreshed} cycles"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 21,
+                    "kind": "Column",
+                    "props": {
+                      "color": "#EAF6F4",
+                      "gap": 6
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 20,
+                "kind": "Card",
+                "props": {
+                  "color": "#EAF6F4",
+                  "padding": 16,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              }
+            ],
+            "events": {},
+            "id": 6,
+            "kind": "Column",
+            "props": {
+              "gap": 12,
+              "padding": 14,
+              "width": 240
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 26,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#0B2E2A",
+                      "size": 18,
+                      "value": "Overview"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 27,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#4B6B67",
+                      "size": 11,
+                      "value": "live telemetry"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 25,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 8
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 31,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 12,
+                              "value": "Requests"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 32,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 26,
+                              "value": "{doneTasks}"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 33,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0F766E",
+                              "size": 11,
+                              "value": "up 12%"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 30,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 6
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 29,
+                    "kind": "Card",
+                    "props": {
+                      "border": "#D7E3E0",
+                      "color": "#FFFFFF",
+                      "padding": 16,
+                      "radius": 14,
+                      "shadow": 3
+                    }
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 36,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 12,
+                              "value": "Open"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 37,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 26,
+                              "value": "{openTasks}"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 38,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0F766E",
+                              "size": 11,
+                              "value": "up 4%"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 35,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 6
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 34,
+                    "kind": "Card",
+                    "props": {
+                      "border": "#D7E3E0",
+                      "color": "#FFFFFF",
+                      "padding": 16,
+                      "radius": 14,
+                      "shadow": 3
+                    }
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 41,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 12,
+                              "value": "Throughput"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 42,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 26,
+                              "value": "{throughput}"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 43,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0F766E",
+                              "size": 11,
+                              "value": "steady"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 40,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 6
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 39,
+                    "kind": "Card",
+                    "props": {
+                      "border": "#D7E3E0",
+                      "color": "#FFFFFF",
+                      "padding": 16,
+                      "radius": 14,
+                      "shadow": 3
+                    }
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 46,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 12,
+                              "value": "Health"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 47,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 26,
+                              "value": "{health}"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 48,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0F766E",
+                              "size": 11,
+                              "value": "nominal"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 45,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 6
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 44,
+                    "kind": "Card",
+                    "props": {
+                      "border": "#D7E3E0",
+                      "color": "#FFFFFF",
+                      "padding": 16,
+                      "radius": 14,
+                      "shadow": 3
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 28,
+                "kind": "Grid",
+                "props": {
+                  "columns": 4
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 53,
+                                "kind": "Icon",
+                                "props": {
+                                  "color": "#0F766E",
+                                  "name": "info"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 52,
+                            "kind": "Container",
+                            "props": {
+                              "color": "#EAF6F4",
+                              "height": 22,
+                              "radius": 6,
+                              "width": 22
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 55,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#0B2E2A",
+                                  "size": 18,
+                                  "value": "Service status"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 56,
+                                "kind": "Text",
+                                "props": {
+                                  "color": "#4B6B67",
+                                  "size": 11,
+                                  "value": "{liveFeed}"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 54,
+                            "kind": "Row",
+                            "props": {
+                              "align": "center",
+                              "gap": 8
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 51,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 8
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 58,
+                            "kind": "Progress",
+                            "props": {
+                              "value": 64
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 59,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 12,
+                              "value": "{load}% capacity - {incidents} incidents"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 57,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 12
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 60,
+                        "kind": "Divider",
+                        "props": {}
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 63,
+                                "kind": "Icon",
+                                "props": {
+                                  "color": "#0F766E",
+                                  "name": "check"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 64,
+                                "kind": "Badge",
+                                "props": {
+                                  "label": "{openTasks} open"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 62,
+                            "kind": "Row",
+                            "props": {
+                              "align": "center",
+                              "gap": 4
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 65,
+                            "kind": "Badge",
+                            "props": {
+                              "label": "{doneTasks} done"
+                            }
+                          },
+                          {
+                            "children": [
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 67,
+                                "kind": "Icon",
+                                "props": {
+                                  "color": "#B45309",
+                                  "name": "warning"
+                                }
+                              },
+                              {
+                                "children": [],
+                                "events": {},
+                                "id": 68,
+                                "kind": "Badge",
+                                "props": {
+                                  "label": "{errorRate}% errors"
+                                }
+                              }
+                            ],
+                            "events": {},
+                            "id": 66,
+                            "kind": "Row",
+                            "props": {
+                              "align": "center",
+                              "gap": 4
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 61,
+                        "kind": "Row",
+                        "props": {
+                          "align": "center",
+                          "gap": 10
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 50,
+                    "kind": "Column",
+                    "props": {
+                      "color": "#FFFFFF",
+                      "gap": 12
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 49,
+                "kind": "Card",
+                "props": {
+                  "border": "#D7E3E0",
+                  "color": "#FFFFFF",
+                  "padding": 18,
+                  "radius": 16,
+                  "shadow": 3
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 70,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#0B2E2A",
+                      "size": 18,
+                      "value": "Services"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 71,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#4B6B67",
+                      "size": 11,
+                      "value": "{crew} on call"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 69,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 8
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 75,
+                            "kind": "Avatar",
+                            "props": {
+                              "label": "Edge"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 74,
+                        "kind": "Container",
+                        "props": {
+                          "height": 26,
+                          "width": 26
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 77,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 14,
+                              "value": "Edge"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 78,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 11,
+                              "value": "gateway"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 76,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 2
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 80,
+                            "kind": "Badge",
+                            "props": {
+                              "label": "healthy"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 79,
+                        "kind": "Container",
+                        "props": {
+                          "width": 62
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 82,
+                            "kind": "Progress",
+                            "props": {
+                              "value": 82
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 81,
+                        "kind": "Container",
+                        "props": {
+                          "width": 190
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 73,
+                    "kind": "Grid",
+                    "props": {
+                      "columns": 4
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 72,
+                "kind": "Card",
+                "props": {
+                  "border": "#D7E3E0",
+                  "color": "#FFFFFF",
+                  "padding": 14,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 86,
+                            "kind": "Avatar",
+                            "props": {
+                              "label": "Ingest"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 85,
+                        "kind": "Container",
+                        "props": {
+                          "height": 26,
+                          "width": 26
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 88,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 14,
+                              "value": "Ingest"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 89,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 11,
+                              "value": "collector"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 87,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 2
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 91,
+                            "kind": "Badge",
+                            "props": {
+                              "label": "healthy"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 90,
+                        "kind": "Container",
+                        "props": {
+                          "width": 62
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 93,
+                            "kind": "Progress",
+                            "props": {
+                              "value": 64
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 92,
+                        "kind": "Container",
+                        "props": {
+                          "width": 190
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 84,
+                    "kind": "Grid",
+                    "props": {
+                      "columns": 4
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 83,
+                "kind": "Card",
+                "props": {
+                  "border": "#D7E3E0",
+                  "color": "#FFFFFF",
+                  "padding": 14,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 97,
+                            "kind": "Avatar",
+                            "props": {
+                              "label": "Warehouse"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 96,
+                        "kind": "Container",
+                        "props": {
+                          "height": 26,
+                          "width": 26
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 99,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#0B2E2A",
+                              "size": 14,
+                              "value": "Warehouse"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 100,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#4B6B67",
+                              "size": 11,
+                              "value": "storage"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 98,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#FFFFFF",
+                          "gap": 2
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 102,
+                            "kind": "Badge",
+                            "props": {
+                              "label": "degraded"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 101,
+                        "kind": "Container",
+                        "props": {
+                          "width": 62
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 104,
+                            "kind": "Progress",
+                            "props": {
+                              "value": 41
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 103,
+                        "kind": "Container",
+                        "props": {
+                          "width": 190
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 95,
+                    "kind": "Grid",
+                    "props": {
+                      "columns": 4
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 94,
+                "kind": "Card",
+                "props": {
+                  "border": "#D7E3E0",
+                  "color": "#FFFFFF",
+                  "padding": 14,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 108,
+                            "kind": "Icon",
+                            "props": {
+                              "color": "#FFFFFF",
+                              "name": "upload"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 107,
+                        "kind": "Container",
+                        "props": {
+                          "color": "#053D38",
+                          "height": 26,
+                          "radius": 8,
+                          "width": 26
+                        }
+                      },
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 110,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#FFFFFF",
+                              "size": 16,
+                              "value": "Run a deploy"
+                            }
+                          },
+                          {
+                            "children": [],
+                            "events": {},
+                            "id": 111,
+                            "kind": "Text",
+                            "props": {
+                              "color": "#CFF3EE",
+                              "size": 11,
+                              "value": "{refreshed} cycles elapsed"
+                            }
+                          }
+                        ],
+                        "events": {},
+                        "id": 109,
+                        "kind": "Column",
+                        "props": {
+                          "color": "#0F766E",
+                          "gap": 4
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 112,
+                        "kind": "Spacer",
+                        "props": {
+                          "width": 12
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {
+                          "tap": {
+                            "actions": [
+                              {
+                                "op": "add",
+                                "target": "refreshed",
+                                "value": 1
+                              },
+                              {
+                                "op": "add",
+                                "target": "load",
+                                "value": 4
+                              },
+                              {
+                                "op": "add",
+                                "target": "doneTasks",
+                                "value": 3
+                              }
+                            ]
+                          }
+                        },
+                        "id": 113,
+                        "kind": "Button",
+                        "props": {
+                          "animate": "spring",
+                          "color": "#FFFFFF",
+                          "label": "Deploy now",
+                          "padding": 12,
+                          "radius": 12,
+                          "shadow": 2
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 106,
+                    "kind": "Row",
+                    "props": {
+                      "align": "center",
+                      "color": "#0F766E",
+                      "gap": 12
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 105,
+                "kind": "Card",
+                "props": {
+                  "gradient": "#0F766E,#053D38",
+                  "padding": 18,
+                  "particles": {
+                    "alpha": 880,
+                    "color": "#FFFFFF",
+                    "count": 24,
+                    "radius": 2,
+                    "seed": 5
+                  },
+                  "radius": 16,
+                  "shadow": 3
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 115,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#0B2E2A",
+                      "size": 14,
+                      "value": "Autoscaling is on for {crew}"
+                    },
+                    "when": "autoscaling"
+                  }
+                ],
+                "events": {},
+                "id": 114,
+                "kind": "Container",
+                "props": {
+                  "color": "#EAF6F4",
+                  "padding": 16,
+                  "radius": 14,
+                  "shadow": 2
+                },
+                "when": "autoscaling"
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 117,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#FFFFFF",
+                      "size": 14,
+                      "value": "{incidents} incidents need attention"
+                    },
+                    "when": "alerts"
+                  }
+                ],
+                "events": {},
+                "id": 116,
+                "kind": "Container",
+                "props": {
+                  "gradient": "#7C2D12,#3B1206",
+                  "padding": 16,
+                  "radius": 14,
+                  "shadow": 3
+                },
+                "when": "alerts"
+              }
+            ],
+            "events": {},
+            "id": 24,
+            "kind": "Column",
+            "props": {
+              "gap": 14,
+              "width": 1000
+            }
+          }
+        ],
+        "events": {},
+        "id": 5,
+        "kind": "Row",
+        "props": {
+          "gap": 16,
+          "padding": 16
+        }
       }
-    ], "events": {}
+    ],
+    "events": {},
+    "id": 0,
+    "kind": "Column",
+    "props": {
+      "gap": 0,
+      "padding": 0
+    }
   }
 }
