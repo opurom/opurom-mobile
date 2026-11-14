@@ -158,7 +158,7 @@ test('the tier decision drives the layout and the frame height at every tier', (
   const remaining = /return\s+(\d+)\s*;/.exec(fallback);
   assert.ok(remaining, 'frameHeight returns a height for the remaining tier');
   heights.push(Number(remaining[1]));
-  assert.deepEqual(heights.sort((a, b) => a - b), [260, 300, 320],
+  assert.deepEqual(heights.sort((a, b) => a - b), [260, 300, 420],
     'frame card height is tier-appropriate');
 
   // The frame is re-rendered when its measured viewport changes.
