@@ -52,6 +52,8 @@ public final class MainActivity extends Activity {
     /** Packaged IR filenames only; no separators, so a hostile extra cannot escape assets. */
     private static final java.util.regex.Pattern IR_NAME =
             java.util.regex.Pattern.compile("[A-Za-z0-9_-]+\\.opuir\\.json");
+    private static final java.util.regex.Pattern SYSTEM_MODE =
+            java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"system\"");
     private static final int MAX_FRAME_PIXELS = 1024;
 
     // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
@@ -131,7 +133,7 @@ public final class MainActivity extends Activity {
         resolvePalette();
 
         System.loadLibrary("opurom_mobile");
-        graphicsIr = readAsset(selectedIrAsset());
+        graphicsIr = resolveSystemMode(readAsset(selectedIrAsset()), dark);
 
         getWindow().setStatusBarColor(brandBottom);
         getWindow().setNavigationBarColor(background);
@@ -861,6 +863,23 @@ public final class MainActivity extends Activity {
             return GRAPHICS_IR;
         }
         return requested;
+    }
+
+    // `theme.mode: system` is a host preference, not a renderer query: the
+    // adapter resolves it once from the configuration and hands a concrete
+    // mode to the deterministic kernel. Only the theme mode token is rewritten,
+    // so every other IR byte (including inlined image payloads) is preserved.
+    private static byte[] resolveSystemMode(byte[] ir, boolean dark) {
+        if (!dark) {
+            return ir;
+        }
+        String text = new String(ir, StandardCharsets.UTF_8);
+        java.util.regex.Matcher matcher = SYSTEM_MODE.matcher(text);
+        if (!matcher.find()) {
+            return ir;
+        }
+        return matcher.replaceFirst("\"mode\": \"dark\"")
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] readAsset(String name) {
