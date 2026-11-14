@@ -169,7 +169,10 @@
     "accent": "#0F766E",
     "fontScale": 1.0,
     "mode": "light",
-    "radius": 14
+    "radius": 14,
+    "tokens": {
+      "stage": "#E9F1EF"
+    }
   },
   "tree": {
     "children": [
