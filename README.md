@@ -84,6 +84,11 @@ declares its own package and a fully qualified `org.opurom.mobile.MainActivity`,
 APKs coexist on one device; each asset directory holds exactly one compiled IR. All three
 variables are optional and the defaults preserve the single-shell build above.
 
+`node build-matrix.mjs` drives that path automatically: it compiles every registered
+sample with the real `opuromc`, writes one manifest and one IR asset directory per app,
+and builds the whole matrix into `target/apk-matrix/out/`. A single device can then hold
+all of them side by side.
+
 ```sh
 npm run build:apk
 adb install -r dist/opurom-mobile-debug.apk
