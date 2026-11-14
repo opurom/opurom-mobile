@@ -86,6 +86,17 @@ adb install -r dist/opurom-mobile-debug.apk
 Entry timestamps are fixed, so rebuilding on the same host is byte-identical; the reported
 SHA-256 is stable. The debug keystore is a build output and is not committed.
 
+`npm run smoke:emulator` installs the built APK on a running emulator or device, launches
+`MainActivity`, confirms the process stays alive with no fatal exception, captures a
+screenshot, and taps the fixture's counter to prove the frame re-renders on interaction. It
+resolves `adb` and the online device itself and prints an honest SKIP naming the missing
+piece when no device is attached, so it is safe to run anywhere.
+
+```sh
+npm run build:apk
+npm run smoke:emulator
+```
+
 ### Measured results (macOS arm64, this host)
 
 | Check | Actual result |
