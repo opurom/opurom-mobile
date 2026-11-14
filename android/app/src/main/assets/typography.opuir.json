@@ -12,10 +12,7 @@
     "accent": "#097FEB",
     "fontScale": 1.5,
     "mode": "system",
-    "radius": 14,
-    "tokens": {
-      "stage": "#EDF0F7"
-    }
+    "radius": 14
   },
   "tree": {
     "children": [

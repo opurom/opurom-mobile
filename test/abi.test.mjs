@@ -28,7 +28,7 @@ const OPU_MAX_DIMENSION = define('OPU_MAX_DIMENSION');
 const OPU_EVENT_TAP = define('OPU_EVENT_TAP');
 const OPU_EVENT_RESET = define('OPU_EVENT_RESET');
 
-// contract-level model of the state machine (mirrors src/lib.rs exactly).
+// Contract-level model of the state machine (mirrors src/lib.rs exactly).
 function newState() {
   return { counter: 0 };
 }

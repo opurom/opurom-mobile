@@ -113,10 +113,7 @@
   "theme": {
     "accent": "#097FEB",
     "mode": "system",
-    "radius": 14,
-    "tokens": {
-      "stage": "#EDF0F7"
-    }
+    "radius": 14
   },
   "tree": {
     "children": [

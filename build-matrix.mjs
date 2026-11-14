@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORK = path.join(ROOT, 'target', 'apk-matrix');
 const OUT = path.join(WORK, 'out');
 const EXAMPLES = path.join(ROOT, '..', 'opurom-examples');

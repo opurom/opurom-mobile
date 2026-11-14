@@ -1,0 +1,11 @@
+{
+  "project": "opurom-mobile",
+  "organization": "opurom",
+  "checks": [
+    "rust-test",
+    "rust-fmt",
+    "node-test",
+    "node-syntax",
+    "validate"
+  ]
+}

@@ -1,9 +1,9 @@
 # opurom-mobile
 
-**Mobile native artifacts** slice of Opurom ([the platform implementation](the platform implementation), framework rules) plus the
-**Android native library and app module** slice ([the network implementation](the network implementation), framework rules). One independent local git repo, one Rust crate with a path dependency on the sibling
+**Mobile native artifacts** slice of Opurom (the platform implementation, framework rules) plus the
+**Android native library and app module** slice (the network implementation, framework rules). One independent local git repo, one Rust crate with a path dependency on the sibling
 [opurom-render](https://github.com/opurom/opurom-render/blob/main/README.md) software renderer, and no network access at build
-time. It implements the C ABI of the [Platform Adapter contract](the framework implementation)
+time. It implements the C ABI of the Platform Adapter contract in the framework rules
 as a small deterministic state machine plus an additive IR path that draws real Opurom UI:
 
 - a real `aarch64-apple-ios` static library with `file`/`lipo`/`otool` evidence;
@@ -116,7 +116,7 @@ npm run smoke:emulator
 | `node test/abi.test.mjs` | `PASS: abi contract fixtures match the documented C contract` |
 | `node --test` (host) | `28 tests; 27 passed; 1 skipped`; ABI fixtures, asset integrity, APK signing determinism, PlatformView conformance |
 | `cargo test --offline --test real_render -- --nocapture` | `7 passed; 0 failed`; reports the measured per-frame microseconds and incremental redraw stats |
-| `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `IR 0.1.0`, `app TodoApp`, byte-identical to the shipped asset |
+| `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1.0`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
 | `file libopurom_mobile.a` | `current ar archive` |
 | `lipo -info libopurom_mobile.a` | `Non-fat file ... is architecture: arm64` |

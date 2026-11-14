@@ -3,7 +3,7 @@
 // asserted against the real source without an Android toolchain.
 'use strict';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -37,4 +37,23 @@ test('the driver feeds build-apk.mjs through the documented OPR_APK overrides', 
     assert.ok(SOURCE.includes(env), `${env} is passed to the child build`);
   }
   assert.match(SOURCE, /'dashboard\.opuir\.json'/, 'IR is named after the shell default load target');
+});
+
+test('the matrix resolves sibling repos from the mobile root, not one level up', () => {
+  // Regression: ROOT was dirname/.. (the umbrella), so EXAMPLES/COMPILER and
+  // build-apk.mjs pointed outside the workspace. Assert the resolved paths
+  // actually exist, which is what lets the matrix build all registered apps.
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const mobileRoot = path.resolve(dir, '..');
+  assert.match(SOURCE, /const ROOT = path\.dirname\(fileURLToPath\(import\.meta\.url\)\)/,
+    'ROOT is the mobile repo root');
+  for (const rel of [
+    path.join('..', 'opurom-examples', 'examples.json'),
+    'build-apk.mjs',
+    path.join('android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+  ]) {
+    assert.ok(existsSync(path.join(mobileRoot, rel)), `resolves ${rel}`);
+  }
+  // The compiler is built by the toolchain, so assert its path shape only.
+  assert.match(SOURCE, /path\.join\(ROOT, '\.\.', 'opurom-lang', 'target', 'debug', 'opuromc'\)/);
 });
