@@ -154,3 +154,35 @@ public final class OpuromState {
         }
     }
 }
+
+/// PlatformView bridge contract, byte-for-byte with opurom-platform.
+public enum OpuromPlatformView {
+    /// Encodes a handle as the shared 8-byte `OPV1` little-endian frame.
+    public static func encodeHandle(_ handle: UInt32) -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: Int(OPU_PLATFORM_VIEW_HANDLE_LEN))
+        let _ = opu_platform_view_encode_handle(handle, &bytes)
+        return bytes
+    }
+
+    /// Decodes the shared 8-byte `OPV1` little-endian frame, or `nil` when invalid.
+    public static func decodeHandle(_ bytes: [UInt8]) -> UInt32? {
+        var handle: UInt32 = 0
+        guard bytes.withUnsafeBufferPointer {
+                opu_platform_view_decode_handle($0.baseAddress, UInt($0.count), &handle) ==
+                    Int32(OPU_PLATFORM_VIEW_OK)
+            } else {
+            return nil
+        }
+        return handle
+    }
+
+    /// True when every logical-pixel bound component is non-negative.
+    public static func isBoundsValid(x: Int32, y: Int32, width: Int32, height: Int32) -> Bool {
+        opu_platform_view_bounds_valid(x, y, width, height) != 0
+    }
+
+    /// True when the documented one-step lifecycle advance is legal.
+    public static func canAdvanceLifecycle(from: Int, to: Int) -> Bool {
+        opu_platform_view_lifecycle_advance(Int32(from), Int32(to)) != 0
+    }
+}

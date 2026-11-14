@@ -103,7 +103,7 @@ npm run smoke:emulator
 | --- | --- |
 | `cargo test --offline` (host) | `29 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
-| `node --test` (host) | `12 passed; 0 failed; 0 skipped`; ABI fixtures, asset integrity and APK signing determinism |
+| `node --test` (host) | `28 tests; 27 passed; 1 skipped`; ABI fixtures, asset integrity, APK signing determinism, PlatformView conformance |
 | `cargo test --offline --test real_render -- --nocapture` | `7 passed; 0 failed`; reports the measured per-frame microseconds and incremental redraw stats |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
@@ -315,10 +315,40 @@ int32_t      opu_renderer_redraw_stats(OpuRenderer *renderer,
 - Determinism: pixel bytes are a pure function of `(counter, x, y)` with no clock, randomness or
   platform input, so the same event sequence yields identical frames on every run.
 
+## PlatformView bridge contract
+
+`include/platform_view.h` is the Android JNI / iOS side of the same deterministic
+native-view bridge implemented in `opurom-platform/src/platform_view.rs`. The
+byte-level handle frame is shared, not duplicated:
+
+```text
+4f 50 56 31 | view handle as little-endian u32
+```
+
+The header defines `opu_platform_view_encode_handle`, `opu_platform_view_decode_handle`,
+`opu_platform_view_bounds_valid` and `opu_platform_view_lifecycle_advance`, all `static inline`
+so the Android JNI shim and the iOS Swift wrapper compile them into their own
+objects without adding a Rust C ABI symbol. Bounds are integer logical pixels; any negative
+component is rejected. Lifecycle is strictly sequential
+(`created -> attached -> resized -> input-forwarded -> disposed`) and only one
+documented step is allowed.
+
+`jni/opurom_jni.c` includes the header, so the Android shared objects compile the
+contract. `jni/OpuromNative.java` mirrors the handle magic, lifecycle states and wire
+opcodes as constants. `swift/module.modulemap` exposes the header in the `COpuromMobile`
+module, and `swift/OpuromMobile.swift` adds `OpuromPlatformView` with `encodeHandle`,
+`decodeHandle`, `isBoundsValid` and `canAdvanceLifecycle`.
+
+`test/platform-view.test.mjs` runs with `node --test`: it compiles a real C program
+into a temp directory, runs it, and asserts the exact handle bytes, bounds rejection
+and strict lifecycle matrix. It then cross-checks the header, Java constants and Swift
+wrapper against the opurom-platform Rust source. No emulator, no fs mocks and no
+golden digest: the bytes come from the real header at test time.
+
 ## Swift wrapper
 
-`swift/module.modulemap` exposes `include/opurom.h` as the `COpuromMobile` module;
-`swift/OpuromMobile.swift` imports it. `OpuromState` wraps `opu_state_new`/`opu_state_free` in a
+`swift/module.modulemap` exposes `include/opurom.h` and `include/platform_view.h` as the
+`COpuromMobile` module; `swift/OpuromMobile.swift` imports it. `OpuromState` wraps `opu_state_new`/`opu_state_free` in a
 final class whose `deinit` is the single free site, checks the output buffer size before calling
 `opu_frame`, and surfaces non-`OPU_OK` statuses as `OpuromMobileError`. `OpuromIRFrame.frame` is
 a one-shot real IR render; `OpuromIRRenderer` owns one reusable renderer handle with `deinit` as
@@ -333,8 +363,10 @@ handles. `jni/opurom_jni.h` gives the exact `Java_org_opurom_mobile_OpuromNative
 against a real `jni.h`, and `jni/opurom_jni.c` implements them: it forwards to the plain C ABI and
 copies the RGBA bytes into the Java `byte[]` during the native call, so no pointer into Rust
 memory outlives that call. The IR shim pins the three arrays, releases the inputs with
-`JNI_ABORT` and copies the output back with mode 0. The shim is linked into both Android shared
-objects, and `verify.mjs` asserts that all eight JNI symbols and all eight C ABI symbols are
+`JNI_ABORT` and copies the output back with mode 0. The shim also includes
+`include/platform_view.h` and compiles the shared PlatformView contract, and it is linked into
+both Android shared objects. `verify.mjs` asserts that all eight JNI symbols and all eight C ABI
+symbols are
 exported from each `.so`.
 
 ## Android app module

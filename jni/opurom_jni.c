@@ -15,6 +15,7 @@
 #include "opurom_jni.h"
 
 #include "opurom.h"
+#include "platform_view.h"
 
 JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuStateNew(JNIEnv *env,
                                                                          jclass clazz) {

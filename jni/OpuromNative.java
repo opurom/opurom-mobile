@@ -11,7 +11,9 @@ package org.opurom.mobile;
  * <p>The IR methods parse OPUIR v0.1 plus a JSON object of state overrides and render real
  * OPUROM UI with the shared software renderer. {@code "{}"} uses the IR initial state.
  * {@link #opuRendererNew} returns a reusable handle for one viewport; release it exactly once
- * with {@link #opuRendererFree}.
+ * with {@link #opuRendererFree}. The PlatformView constants carry the shared byte-level handle
+ * encoding, bounds validation and strict lifecycle advance from include/platform_view.h, which
+ * the JNI shim compiles into the Android shared objects.
  *
  * <p>The Android shared objects are built by {@code verify.mjs} with the Android NDK clang from
  * {@code jni/opurom_jni.c} plus the Rust static library, for {@code aarch64-linux-android} and
@@ -30,6 +32,24 @@ public final class OpuromNative {
 
     public static final int EVENT_TAP = 1;
     public static final int EVENT_RESET = 2;
+
+    /** Shared OPV1 handle-frame magic and length, byte-for-byte with include/platform_view.h. */
+    public static final int PLATFORM_VIEW_HANDLE_LEN = 8;
+    public static final byte PLATFORM_VIEW_HANDLE_MAGIC_0 = 0x4f;
+    public static final byte PLATFORM_VIEW_HANDLE_MAGIC_1 = 0x50;
+    public static final byte PLATFORM_VIEW_HANDLE_MAGIC_2 = 0x56;
+    public static final byte PLATFORM_VIEW_HANDLE_MAGIC_3 = 0x31;
+
+    /** Platform-view lifecycle states and wire opcodes, mirroring include/platform_view.h. */
+    public static final int PLATFORM_VIEW_LIFECYCLE_CREATED = 0;
+    public static final int PLATFORM_VIEW_LIFECYCLE_ATTACHED = 1;
+    public static final int PLATFORM_VIEW_LIFECYCLE_RESIZED = 2;
+    public static final int PLATFORM_VIEW_LIFECYCLE_INPUT_FORWARDED = 3;
+    public static final int PLATFORM_VIEW_LIFECYCLE_DISPOSED = 4;
+    public static final int PLATFORM_VIEW_EVENT_PRESS = 1;
+    public static final int PLATFORM_VIEW_EVENT_RELEASE = 2;
+    public static final int PLATFORM_VIEW_EVENT_MOVE = 3;
+    public static final int PLATFORM_VIEW_EVENT_FOCUS = 4;
 
     private OpuromNative() {
     }
