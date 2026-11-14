@@ -817,7 +817,7 @@ public final class MainActivity extends Activity {
         int tier = layoutTier(getResources().getConfiguration().screenWidthDp);
         if (tier == TIER_THREE_COLUMN) return 300;
         if (tier == TIER_TWO_COLUMN) return 260;
-        return 320;
+        return 420;
     }
 
     private int dp(float value) {
