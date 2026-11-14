@@ -32,9 +32,12 @@ function run(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { encoding: 'utf8', timeout: 120_000, ...opts });
 }
 
-// adb lives under platform-tools in any Android SDK root on this host.
+// adb lives under platform-tools in an Android SDK root. An explicit OPR_ADB
+// is authoritative: if it is set but missing, do not silently fall back.
 function findAdb() {
-  if (process.env.OPR_ADB && existsSync(process.env.OPR_ADB)) return process.env.OPR_ADB;
+  if (process.env.OPR_ADB) {
+    return existsSync(process.env.OPR_ADB) ? process.env.OPR_ADB : null;
+  }
   const roots = [
     process.env.OPR_ANDROID_SDK,
     process.env.ANDROID_HOME,
