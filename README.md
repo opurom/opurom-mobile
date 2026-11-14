@@ -398,6 +398,13 @@ exported from each `.so`.
   Only packaged `<name>.opuir.json` filenames are accepted; an absent or malformed value falls
   back to `dashboard.opuir.json`. Each program is compiled from the corresponding
   `../opurom-examples/<name>.opu` and sealed with the same asset key before packaging.
+- An IR that carries images is made self-contained before packaging:
+  `tools/inline-images.mjs` replaces every static `assets/*.png` reference in the
+  tree and state with a `data:image/png;base64,...` URI, so the native decoder
+  and the web emitter paint identical pixels without a platform asset channel.
+  `media.opuir.json` is regenerated from `../opurom-examples/media.opu` with
+  `opuromc compile` followed by that tool, then packaging seals the result.
+  Select it with `--es org.opurom.mobile.IR media.opuir.json`.
 - `android/app/src/main/assets/dashboard.opuir.json` is a graphics-only IR: gradient header,
   particle field and rounded cards with shadows. The self-drawn frame renders through JNI into
   the card's actual viewport, so it fills the card instead of sitting at a fixed size. The host
