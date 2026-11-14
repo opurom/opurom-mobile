@@ -78,6 +78,12 @@ then verifies the v1, v2 and v3 signatures, the alignment, and the launchable ac
 reporting success. Every child process has a bounded timeout; a missing tool is a concrete
 error naming what to install.
 
+For a matrix of independent applications, `OPR_APK_OUTPUT`, `OPR_APK_MANIFEST` and
+`OPR_APK_ASSETS` override the output path, manifest and asset directory. Each manifest
+declares its own package and a fully qualified `org.opurom.mobile.MainActivity`, so several
+APKs coexist on one device; each asset directory holds exactly one compiled IR. All three
+variables are optional and the defaults preserve the single-shell build above.
+
 ```sh
 npm run build:apk
 adb install -r dist/opurom-mobile-debug.apk
