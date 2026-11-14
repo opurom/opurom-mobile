@@ -66,6 +66,20 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIr(JNIEnv
                                                                            jint width,
                                                                            jint height);
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameRoute(
+    JNIEnv *env, jclass clazz, jlong renderer, jbyteArray ir, jbyteArray state, jbyteArray route,
+    jbyteArray out, jint width, jint height);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray route, jbyteArray out,
+    jint width, jint height);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray out);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrRouteAt(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jint index, jbyteArray out);
+
 #ifdef __cplusplus
 }
 #endif
