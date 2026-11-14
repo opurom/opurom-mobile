@@ -526,8 +526,12 @@ public final class MainActivity extends Activity {
         lastMeasuredWidth = measuredWidth;
         lastMeasuredHeight = measuredHeight;
 
-        int width = measuredWidth;
-        int height = measuredHeight;
+        // The renderer lays out in logical pixels: feed it dp, not raw device
+        // pixels, so the breakpoint tier matches the host and a phone frame is
+        // laid out compact instead of stretched over a wide-viewport grid.
+        float density = getResources().getDisplayMetrics().density;
+        int width = Math.max(1, (int) (measuredWidth / density));
+        int height = Math.max(1, (int) (measuredHeight / density));
         // Render at the view's aspect ratio: capping both dimensions by the same
         // factor keeps the bitmap proportional, so FIT_XY fills the card without
         // letterbox bars or a stretched frame at wide window sizes.
