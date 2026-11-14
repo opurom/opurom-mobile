@@ -377,13 +377,15 @@ exported from each `.so`.
 - `android/app/src/main/AndroidManifest.xml` declares `org.opurom.mobile.MainActivity` as the
   launcher activity.
 - `android/app/src/main/java/org/opurom/mobile/MainActivity.java` builds the adaptive native
-  shell: a single-hue glass lamina header, session and task cards, and a Refresh/Reset action
-  bar. The light and dark palettes share one deep-green brand hue and a teal accent; every
-  surface and text colour comes from that palette, so no two-colour gradients are baked into
-  the chrome. Light and dark values are selected from `uiMode`. All typography uses platform
-  typefaces at density-independent sizes. Refresh rotates its glyph, fades the counter,
-  re-renders the frame and crossfades it; Reset restores the initial state. Every button has a
-  ripple and a press-scale animator.
+  shell: a cyan-to-blue brand header, session and task cards, and a Refresh/Reset action
+  bar. The light palette uses the measured design-system ramp (brand `#0A71FC`, cyan
+  `#0DB2FF`, deep ink `#132C5A`, neutral surface `#F4F6F9`) and the dark palette mirrors it
+  on deep navy; every surface and text colour comes from that palette. Light and dark values
+  are selected from `uiMode`. All typography uses platform typefaces at density-independent
+  sizes. Refresh rotates its glyph, fades the counter, re-renders the frame and crossfades it;
+  Reset restores the initial state. Buttons resolve Default, Hover, Active, Focus and Disabled
+  through one `ColorStateList`, with disabled taking precedence, and keep a ripple plus a
+  press-scale animator.
 - The shell reflows from three width tiers, and the breakpoints are the renderer's own logical
   pixel boundaries. Below `600 dp` the shell is a single scrollable column; at `600 dp` and
   above it splits into two columns; at `1200 dp` and above it becomes a three-column workbench
