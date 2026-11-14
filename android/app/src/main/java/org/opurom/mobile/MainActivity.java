@@ -615,22 +615,49 @@ public final class MainActivity extends Activity {
                 }).start();
     }
 
+    // The design-system reference defines five control states. Android selects
+    // these by view state, so hover/active/focus/disabled are declarative and
+    // deterministic rather than driven by ad-hoc animation callbacks.
+    private static ColorStateList controlColors(int normal, int hovered,
+            int active, int focused, int disabled) {
+        final int[][] states = {
+            {-android.R.attr.state_enabled},
+            {android.R.attr.state_pressed},
+            {android.R.attr.state_focused},
+            {android.R.attr.state_hovered},
+            {}
+        };
+        return new ColorStateList(states,
+                new int[] {disabled, active, focused, hovered, normal});
+    }
+
     private LinearLayout actionButton(String name, boolean primary) {
-        GradientDrawable shape = primary ? lamina(14, 0x2BFFFFFF) : new GradientDrawable();
-        if (!primary) {
-            shape.setColor(card);
-            shape.setCornerRadius(dp(14));
+        GradientDrawable shape = new GradientDrawable();
+        shape.setCornerRadius(dp(14));
+        if (primary) {
+            shape.setColor(controlColors(brandBottom, 0xFF0C7DFD, 0xFF0551DF,
+                    0xFF0DB2FF, 0xFFB7C4D6));
+        } else {
+            shape.setColor(controlColors(card, 0xFFEAF2FF, 0xFFDCE4EF,
+                    0xFFF2F8FF, 0xFFEEF1F5));
             shape.setStroke(1, divider);
         }
         RippleDrawable ripple = new RippleDrawable(
-                ColorStateList.valueOf(primary ? 0x33FFFFFF : 0x1A0F766E), shape, shape);
+                ColorStateList.valueOf(primary ? 0x33FFFFFF : 0x1A0A71FC), shape, shape);
         LinearLayout button = new LinearLayout(this);
         button.setBackground(ripple);
+        button.setFocusable(true);
+        button.setClickable(true);
         button.setGravity(Gravity.CENTER);
         button.setElevation(dp(primary ? 6 : 2));
         TextView text = label(name.toUpperCase(), 13,
                 Typeface.create("sans-serif-medium", Typeface.NORMAL),
                 primary ? onBrand : accent);
+        text.setTextColor(controlColors(primary ? onBrand : accent,
+                primary ? onBrand : 0xFF0A71FC,
+                primary ? onBrand : 0xFF0551DF,
+                primary ? onBrand : 0xFF0A71FC,
+                primary ? 0xFFF2F5FA : 0xFF9AA7BA));
         text.setLetterSpacing(0.08f);
         button.addView(text);
         button.setOnTouchListener((view, event) -> {
@@ -698,28 +725,30 @@ public final class MainActivity extends Activity {
     // visual proportions; the palette is the only configuration-dependent part.
     // ------------------------------------------------------------------
     private void resolvePalette() {
+        // Defaults mirror the framework design-system reference: a cyan-to-blue
+        // brand ramp, deep-ink text on neutral surfaces and semantic success.
         if (dark) {
-            background = 0xFF101A19;
-            card = 0xFF182826;
-            text = 0xFFE8F2EF;
-            muted = 0xFF94ABA5;
-            divider = 0xFF2C4540;
-            accent = 0xFF5FC2AE;
-            brandTop = 0xFF1D4A42;
-            brandBottom = 0xFF12332E;
-            onBrand = 0xFFEAF6F2;
-            positive = 0xFF7BD7B4;
+            background = 0xFF0E1729;
+            card = 0xFF16223B;
+            text = 0xFFEAF1FB;
+            muted = 0xFF94A6BF;
+            divider = 0xFF2A3A55;
+            accent = 0xFF0DB2FF;
+            brandTop = 0xFF0DB2FF;
+            brandBottom = 0xFF0551DF;
+            onBrand = 0xFFFFFFFF;
+            positive = 0xFF23CA77;
         } else {
-            background = 0xFFEDF2EF;
-            card = 0xFFFBFCFB;
-            text = 0xFF152A26;
-            muted = 0xFF5C716B;
-            divider = 0xFFD5E2DC;
-            accent = 0xFF0F766E;
-            brandTop = 0xFF155E52;
-            brandBottom = 0xFF0E423A;
-            onBrand = 0xFFF2FBF8;
-            positive = 0xFF137A4B;
+            background = 0xFFF4F6F9;
+            card = 0xFFFFFFFF;
+            text = 0xFF132C5A;
+            muted = 0xFF5A6478;
+            divider = 0xFFDCE4EF;
+            accent = 0xFF0A71FC;
+            brandTop = 0xFF0DB2FF;
+            brandBottom = 0xFF0A71FC;
+            onBrand = 0xFFFFFFFF;
+            positive = 0xFF1FB14C;
         }
     }
 
