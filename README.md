@@ -101,10 +101,10 @@ npm run smoke:emulator
 
 | Check | Actual result |
 | --- | --- |
-| `cargo test --offline` (host) | `28 passed; 0 failed; 0 ignored` |
+| `cargo test --offline` (host) | `29 passed; 0 failed; 0 ignored` |
 | `node test/abi.test.mjs` | `PASS: abi spec fixtures match the documented C contract` |
 | `node --test` (host) | `12 passed; 0 failed; 0 skipped`; ABI fixtures, asset integrity and APK signing determinism |
-| `cargo test --offline --test real_render -- --nocapture` | `6 passed; 0 failed`; reports the measured per-frame microseconds |
+| `cargo test --offline --test real_render -- --nocapture` | `7 passed; 0 failed`; reports the measured per-frame microseconds and incremental redraw stats |
 | `opuromc compile ../opurom-examples/todo.opu` | `1602` bytes, `ir 0.1`, `app TodoApp`, byte-identical to the shipped asset |
 | `cargo build --release --target aarch64-apple-ios --offline` | archive written, `19393896` bytes |
 | `file libopurom_mobile.a` | `current ar archive` |
@@ -280,6 +280,8 @@ int32_t      opu_renderer_frame(OpuRenderer *renderer,
                                 const uint8_t *ir_json, size_t ir_len,
                                 const uint8_t *state_json, size_t state_len,
                                 uint8_t *out, uint32_t width, uint32_t height);
+int32_t      opu_renderer_redraw_stats(OpuRenderer *renderer,
+                                       size_t *redrawn_nodes, uint64_t *redraw_pixels);
 ```
 
 - **State:** one integer counter starting at 0. `OPU_EVENT_TAP` (1) does a checked `+1`,
@@ -295,9 +297,13 @@ int32_t      opu_renderer_frame(OpuRenderer *renderer,
   `OPU_ERR_IR` (6), malformed state `OPU_ERR_STATE` (7); neither can panic or abort. JSON inputs
   are borrowed, length-checked up to `OPU_MAX_JSON_BYTES` (16 MiB) and need no NUL terminator.
 - **Reuse:** `opu_renderer_new` returns one caller-owned renderer for a fixed viewport (NULL on
-  invalid dimensions or failure). `opu_renderer_frame` renders through it, keeping the previous
-  frame for dirty-rect diffing; `width`/`height` must match, and the caller frees exactly once
-  with `opu_renderer_free`. A null renderer returns `OPU_ERR_NULL`.
+  invalid dimensions or failure). `opu_renderer_frame` renders through it with the renderer's
+  incremental dirty-region path: after the first full raster, a state change recomputes only the
+  dirty region and leaves the rest of the previous frame, so successive frames are byte-identical
+  to a full raster while recomputing less. `width`/`height` must match, and the caller frees
+  exactly once with `opu_renderer_free`. `opu_renderer_redraw_stats` reports the nodes and pixels
+  the most recent `opu_renderer_frame` recomputed (zero for a full raster). A null renderer returns
+  `OPU_ERR_NULL`.
 - **Nulls are never dereferenced:** every status-returning function checks its pointer arguments
   before use and returns `OPU_ERR_NULL`; `opu_state_free(NULL)` and `opu_renderer_free(NULL)` are
   no-ops.
