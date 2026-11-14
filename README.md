@@ -392,8 +392,9 @@ exported from each `.so`.
   detail view side by side while a phone shows one column. The rail's three views switch the
   detail column between the session summary, the task list and both; the stats and task cards
   are moved between views instead of rebuilt, so one set of state is on screen at a time. The
-  frame card is taller at each wider tier and the frame is re-rendered whenever its measured
-  viewport changes, so the same APK fills its card at every width without letterboxing.
+  compact tier gives the frame the most height because its single-column layout is the longest;
+  the frame is re-rendered whenever its measured viewport changes, so the same APK fills its
+  card at every width without letterboxing.
 - The APK carries several compiled programs in `android/app/src/main/assets/`. The launch
   intent selects which one drives the self-drawn frame through the
   `org.opurom.mobile.IR` string extra, for example
