@@ -56,6 +56,8 @@ public final class MainActivity extends Activity {
             java.util.regex.Pattern.compile("[A-Za-z0-9_-]+\\.opuir\\.json");
     private static final java.util.regex.Pattern SYSTEM_MODE =
             java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"system\"");
+    private static final java.util.regex.Pattern FONT_METRICS =
+            java.util.regex.Pattern.compile("\"fontMetrics\"\\s*:\\s*\"proportional\"");
     private static final int MAX_FRAME_PIXELS = 1024;
 
     // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
@@ -134,6 +136,10 @@ public final class MainActivity extends Activity {
     private int brandBottom;
     private int onBrand;
     private int positive;
+    // Native caption typeface: the IR's theme.fontMetrics selects proportional
+    // (sans-serif) or fixed (monospace) for the shell's own labels. The
+    // self-drawn frame is unaffected; it stays under the JNI boundary.
+    private String captionFace = "sans-serif";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -145,6 +151,7 @@ public final class MainActivity extends Activity {
         System.loadLibrary("opurom_mobile");
         graphicsIr = resolveSystemMode(readAsset(selectedIrAsset()), dark);
         initialRoute = OpuromNative.initialRoute(graphicsIr);
+        applyThemeTokens(new String(graphicsIr, StandardCharsets.UTF_8));
 
         getWindow().setStatusBarColor(brandBottom);
         getWindow().setNavigationBarColor(background);
@@ -398,7 +405,7 @@ public final class MainActivity extends Activity {
         // it: deep ink on the surface keeps the hybrid caption readable over
         // any rendered background without overlapping the frame's own text.
         TextView caption = label("OPUROM / NATIVE HYBRID", 11,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), muted);
+                Typeface.create(captionFace, Typeface.NORMAL), muted);
         caption.setLetterSpacing(0.14f);
         LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -824,6 +831,36 @@ public final class MainActivity extends Activity {
     // Small helpers. All sizes come from dp/sp so density never changes the
     // visual proportions; the palette is the only configuration-dependent part.
     // ------------------------------------------------------------------
+    // Semantic theme. The IR's theme.tokens/theme.accent drive the native
+    // chrome colours that map to semantic roles; any absent token keeps the
+    // measured default from resolvePalette. The frame keeps its own palette,
+    // so frame digest parity is untouched.
+    // ------------------------------------------------------------------
+    private void applyThemeTokens(String ir) {
+        ThemeTokens.Palette theme = ThemeTokens.resolve(ir);
+        // A zero field means the IR declared no such token: keep the
+        // mode-measured palette resolvePalette already set (light and dark
+        // differ), so an IR without tokens leaves the chrome unchanged.
+        if (theme.success != 0) positive = theme.success;
+        // The Instance accent carries primary actions and the progress fill.
+        if (theme.accent != 0) {
+            accent = theme.accent;
+            brandBottom = theme.accent;
+        }
+        // Honor proportional type for the native captions where feasible:
+        // a proportional system family vs a fixed-width one. Fixed glyph
+        // advances are a pixel-grid concern of the self-drawn frame; the native
+        // TextViews already use the platform system face, so this only swaps
+        // the family for the shell's own labels.
+        captionFace = themeFontMetrics(ir) ? "sans-serif" : "monospace";
+    }
+
+    /** True when the IR selects proportional text metrics ({@code theme.fontMetrics}). */
+    static boolean themeFontMetrics(String ir) {
+        return ir != null
+                && FONT_METRICS.matcher(ir).find();
+    }
+
     private void resolvePalette() {
         // Defaults mirror the framework design-system reference: a cyan-to-blue
         // brand ramp, deep-ink text on neutral surfaces and semantic success.
@@ -902,7 +939,7 @@ public final class MainActivity extends Activity {
 
     private TextView sectionCaption(String value) {
         TextView view = label(value, 12,
-                Typeface.create("sans-serif", Typeface.NORMAL), muted);
+                Typeface.create(captionFace, Typeface.NORMAL), muted);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(12);
