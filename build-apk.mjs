@@ -24,12 +24,17 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const WORK = path.join(ROOT, 'target', 'verify');
 const JNI_LIBS = path.join(ROOT, 'target', 'android', 'jniLibs');
 const DIST = path.join(ROOT, 'dist');
-const OUTPUT = path.join(DIST, 'opurom-mobile-debug.apk');
+// One APK per sample app: callers override the package-specific inputs through
+// the environment; the defaults keep the single-shell build unchanged.
+const OUTPUT = process.env.OPR_APK_OUTPUT || path.join(DIST, 'opurom-mobile-debug.apk');
+const MANIFEST = process.env.OPR_APK_MANIFEST
+  || path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+const ASSETS_SRC = process.env.OPR_APK_ASSETS
+  || path.join(ROOT, 'android', 'app', 'src', 'main', 'assets');
 const KEYSTORE = path.join(DIST, 'opurom-debug.jks');
 const STORE_PASS = 'android';
 const KEY_ALIAS = 'opuromdebug';
 const ABI = ['arm64-v8a', 'x86_64'];
-const ASSETS_SRC = path.join(ROOT, 'android', 'app', 'src', 'main', 'assets');
 // IR assets are encrypted before packaging so a plain `unzip` of the APK does not
 // expose the compiled UI/IR source; MainActivity decrypts them with the same key.
 const ASSET_MAGIC = Buffer.from('OPU1', 'utf8');
@@ -265,7 +270,7 @@ const baseApk = path.join(aaptWork, 'base.apk');
 r = run('aapt2 link', [
   aapt2, 'link', '-o', baseApk, '-I', androidJar,
   '-A', packedAssets,
-  '--manifest', path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+  '--manifest', MANIFEST,
   resZip,
 ]);
 check(r.ok && existsSync(baseApk), 'aapt2 link base APK', r);
@@ -349,7 +354,7 @@ const schemes = ['v1', 'v2', 'v3'].filter((s) => new RegExp(`Verified using ${s}
 // needs v2+v3, while API < 30 requires v1 as well.
 const targetSdk = Number(
   /android:targetSdkVersion\s*=\s*"(\d+)"/.exec(
-    readFileSync(path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8'),
+    readFileSync(MANIFEST, 'utf8'),
   )?.[1] ?? platform.api,
 );
 const needsV1 = targetSdk < 30;
@@ -367,6 +372,7 @@ check(r.ok && launchable, 'aapt2 launchable activity', r);
 const bytes = readFileSync(OUTPUT);
 const sha256 = createHash('sha256').update(bytes).digest('hex');
 say(`APK ready: ${OUTPUT} | API ${platform.api} | build-tools ${path.basename(buildTools)}`);
-console.log(`package: org.opurom.mobile | launchable: ${launchable[1]} | schemes: ${schemes.join('+')}`);
+const pkg = /package\s*=\s*"([^"]+)"/.exec(readFileSync(MANIFEST, 'utf8'))?.[1] ?? 'org.opurom.mobile';
+console.log(`package: ${pkg} | launchable: ${launchable[1]} | schemes: ${schemes.join('+')}`);
 console.log(`size: ${statSync(OUTPUT).size} bytes | sha256: ${sha256}`);
-console.log('install: adb install -r dist/opurom-mobile-debug.apk');
+console.log(`install: adb install -r ${OUTPUT}`);
