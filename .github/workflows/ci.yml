@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/.."
-          for repo in opurom-spec opurom-lang opurom-core opurom-render opurom-platform opurom-server opurom-db opurom-runtime-adapters opurom-plugins opurom-cli; do
+          for repo in opurom-spec opurom-lang opurom-core opurom-render opurom-platform opurom-server opurom-db opurom-runtime-adapters opurom-plugins opurom-cli opurom-examples opurom-icons; do
             url="https://github.com/opurom/${repo}.git"
             if [ "$repo" != "$(basename "$GITHUB_WORKSPACE")" ] && git ls-remote --exit-code "$url" >/dev/null 2>&1; then
               git clone --depth 1 "$url" "$repo" || true
