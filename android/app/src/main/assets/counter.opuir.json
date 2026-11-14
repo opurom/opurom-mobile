@@ -1,0 +1,189 @@
+{
+  "app": "Counter",
+  "ir": "0.1",
+  "state": [
+    {
+      "init": 0,
+      "name": "count",
+      "type": "int"
+    }
+  ],
+  "theme": {
+    "accent": "#097FEB",
+    "mode": "light",
+    "radius": 14
+  },
+  "tree": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 3,
+                "kind": "Text",
+                "props": {
+                  "color": "#FFFFFF",
+                  "size": 22,
+                  "value": "OPUROM Counter"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 4,
+                "kind": "Text",
+                "props": {
+                  "color": "#D6E8FF",
+                  "size": 12,
+                  "value": "Deterministic integer state, tap to change"
+                }
+              }
+            ],
+            "events": {},
+            "id": 2,
+            "kind": "Container",
+            "props": {
+              "animate": "ease",
+              "gradient": "#097FEB,#043B70",
+              "padding": 20,
+              "radius": 18,
+              "shadow": 4
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 7,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#667085",
+                      "size": 12,
+                      "value": "Count"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 8,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#101828",
+                      "size": 40,
+                      "value": "{count}"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 6,
+                "kind": "Column",
+                "props": {
+                  "align": "center",
+                  "color": "#FFFFFF",
+                  "gap": 6
+                }
+              }
+            ],
+            "events": {},
+            "id": 5,
+            "kind": "Container",
+            "props": {
+              "border": "#E4E9F2",
+              "color": "#FFFFFF",
+              "padding": 20,
+              "radius": 16,
+              "shadow": 3
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {
+                      "tap": {
+                        "op": "add",
+                        "target": "count",
+                        "value": -1
+                      }
+                    },
+                    "id": 11,
+                    "kind": "Button",
+                    "props": {
+                      "animate": "spring",
+                      "color": "#097FEB",
+                      "fontScale": 1.25,
+                      "label": "-",
+                      "padding": 12,
+                      "radius": 12,
+                      "shadow": 2
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {
+                      "tap": {
+                        "op": "add",
+                        "target": "count",
+                        "value": 1
+                      }
+                    },
+                    "id": 12,
+                    "kind": "Button",
+                    "props": {
+                      "animate": "spring",
+                      "color": "#097FEB",
+                      "fontScale": 1.25,
+                      "label": "+",
+                      "padding": 12,
+                      "radius": 12,
+                      "shadow": 2
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 10,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "color": "#F4F7FB",
+                  "gap": 12
+                }
+              }
+            ],
+            "events": {},
+            "id": 9,
+            "kind": "Container",
+            "props": {
+              "color": "#F4F7FB",
+              "padding": 13,
+              "radius": 16,
+              "shadow": 3
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Column",
+        "props": {
+          "gap": 14
+        }
+      }
+    ],
+    "component": "ScrollView",
+    "events": {},
+    "id": 0,
+    "kind": "Scroll",
+    "props": {
+      "height": 400,
+      "padding": 16
+    }
+  }
+}

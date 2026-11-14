@@ -1,0 +1,1213 @@
+{
+  "app": "Calculator",
+  "computed": [
+    {
+      "expr": "cur * 10 + digit",
+      "name": "next",
+      "type": "int"
+    },
+    {
+      "expr": "rest - cur",
+      "name": "nextRest",
+      "type": "int"
+    },
+    {
+      "expr": "acc * sAdd + acc * sSub + cur * sNone + cur * sAdd - cur * sSub + acc * cur * sMul + q * sDiv",
+      "name": "applied",
+      "type": "int"
+    }
+  ],
+  "ir": "0.1",
+  "state": [
+    {
+      "init": 0,
+      "name": "cur",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "digit",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "acc",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "rest",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "q",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "out",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "res",
+      "type": "int"
+    },
+    {
+      "init": 1,
+      "name": "sNone",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "sAdd",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "sSub",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "sMul",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "sDiv",
+      "type": "int"
+    },
+    {
+      "init": false,
+      "name": "divMode",
+      "type": "bool"
+    },
+    {
+      "init": true,
+      "name": "normalMode",
+      "type": "bool"
+    },
+    {
+      "init": "",
+      "name": "opLabel",
+      "type": "string"
+    },
+    {
+      "init": 0,
+      "name": "next",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "nextRest",
+      "type": "int"
+    },
+    {
+      "init": 0,
+      "name": "applied",
+      "type": "int"
+    }
+  ],
+  "theme": {
+    "accent": "#097FEB",
+    "mode": "system",
+    "radius": 14,
+    "tokens": {
+      "stage": "#EDF0F7"
+    }
+  },
+  "tree": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 3,
+                "kind": "Text",
+                "props": {
+                  "color": "#FFFFFF",
+                  "size": 24,
+                  "value": "OPUROM Calculator"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 4,
+                "kind": "Text",
+                "props": {
+                  "color": "#D6E8FF",
+                  "size": 12,
+                  "value": "Integer arithmetic with computed state"
+                }
+              }
+            ],
+            "events": {},
+            "id": 2,
+            "kind": "Container",
+            "props": {
+              "animate": "ease",
+              "gradient": "#097FEB,#043B70",
+              "padding": 24,
+              "radius": 18,
+              "shadow": 4
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 6,
+                "kind": "Text",
+                "props": {
+                  "color": "#FFFFFF",
+                  "size": 44,
+                  "value": "{out}"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 7,
+                "kind": "Text",
+                "props": {
+                  "color": "#D6E8FF",
+                  "size": 14,
+                  "value": "Pending {opLabel}   |   Quotient {q}   |   Remainder {rest}"
+                }
+              }
+            ],
+            "events": {},
+            "id": 5,
+            "kind": "Container",
+            "props": {
+              "animate": "ease",
+              "color": "#043B70",
+              "gradient": "#043B70,#097FEB",
+              "padding": 30,
+              "radius": 18,
+              "shadow": 3
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 8,
+            "kind": "Text",
+            "props": {
+              "color": "#097FEB",
+              "size": 12,
+              "value": "Divide: = subtracts once; stop when remainder < divisor"
+            },
+            "when": "divMode"
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 7
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 10,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "7",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 8
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 11,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "8",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 9
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 12,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "9",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "applied"
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": "/"
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "normalMode",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                "id": 13,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "/",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                }
+              }
+            ],
+            "events": {},
+            "id": 9,
+            "kind": "Row",
+            "props": {
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 4
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 15,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "4",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 5
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 16,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "5",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 6
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 17,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "6",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "applied"
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": "x"
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "normalMode",
+                        "value": true
+                      }
+                    ]
+                  }
+                },
+                "id": 18,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "x",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                }
+              }
+            ],
+            "events": {},
+            "id": 14,
+            "kind": "Row",
+            "props": {
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 20,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "1",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 2
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 21,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "2",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 3
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 22,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "3",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "applied"
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": "-"
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "normalMode",
+                        "value": true
+                      }
+                    ]
+                  }
+                },
+                "id": 23,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "-",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                }
+              }
+            ],
+            "events": {},
+            "id": 19,
+            "kind": "Row",
+            "props": {
+              "gap": 10
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "res",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": ""
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "normalMode",
+                        "value": true
+                      }
+                    ]
+                  }
+                },
+                "id": 25,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#101828",
+                  "fontScale": 1.25,
+                  "label": "C",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "valueFrom": "next"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      }
+                    ]
+                  }
+                },
+                "id": 26,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#097FEB",
+                  "fontScale": 1.25,
+                  "label": "0",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 2
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "valueFrom": "nextRest"
+                      },
+                      {
+                        "op": "add",
+                        "target": "q",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "q"
+                      }
+                    ]
+                  }
+                },
+                "id": 27,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "=",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                },
+                "when": "divMode"
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "applied"
+                      },
+                      {
+                        "op": "set",
+                        "target": "res",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "res"
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": "="
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                "id": 28,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "=",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                },
+                "when": "normalMode"
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "applied"
+                      },
+                      {
+                        "op": "set",
+                        "target": "rest",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "q",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "digit",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "opLabel",
+                        "value": "+"
+                      },
+                      {
+                        "op": "set",
+                        "target": "sNone",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sAdd",
+                        "value": 1
+                      },
+                      {
+                        "op": "set",
+                        "target": "sSub",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sMul",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "sDiv",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "normalMode",
+                        "value": true
+                      }
+                    ]
+                  }
+                },
+                "id": 29,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "color": "#04509B",
+                  "fontScale": 1.25,
+                  "label": "+",
+                  "padding": 18,
+                  "radius": 14,
+                  "shadow": 3
+                }
+              }
+            ],
+            "events": {},
+            "id": 24,
+            "kind": "Row",
+            "props": {
+              "gap": 10
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 30,
+            "kind": "Spacer",
+            "props": {
+              "height": 20
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Column",
+        "props": {
+          "gap": 28,
+          "padding": 28,
+          "width": 800
+        }
+      }
+    ],
+    "events": {},
+    "id": 0,
+    "kind": "Scroll",
+    "props": {
+      "animate": "ease",
+      "border": "#EDF2FA",
+      "color": "#EDF2FA",
+      "height": 640,
+      "radius": 14
+    }
+  }
+}

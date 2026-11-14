@@ -1,0 +1,430 @@
+{
+  "app": "Motion",
+  "ir": "0.1",
+  "state": [
+    {
+      "init": false,
+      "name": "open",
+      "type": "bool"
+    },
+    {
+      "init": 60,
+      "name": "level",
+      "type": "int"
+    }
+  ],
+  "theme": {
+    "accent": "#097FEB",
+    "mode": "light",
+    "radius": 14,
+    "tokens": {
+      "stage": "#EDF0F7"
+    }
+  },
+  "tree": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [],
+            "events": {},
+            "id": 2,
+            "kind": "Text",
+            "props": {
+              "color": "#FFFFFF",
+              "size": 20,
+              "value": "Motion Studio"
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 3,
+            "kind": "Text",
+            "props": {
+              "color": "#D6E8FF",
+              "size": 11,
+              "value": "Springs, eased values and a tap-to-expand panel"
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Container",
+        "props": {
+          "animate": "ease",
+          "gradient": "#097FEB,#043B70",
+          "padding": 16,
+          "radius": 16,
+          "shadow": 4
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 7,
+                    "kind": "Badge",
+                    "props": {
+                      "color": "#097FEB",
+                      "label": "Spring"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 8,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#101828",
+                      "size": 12,
+                      "value": "Cards settle from the centre on load"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 6,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 10
+                }
+              }
+            ],
+            "events": {},
+            "id": 5,
+            "kind": "Container",
+            "props": {
+              "animate": "spring",
+              "border": "#E4E9F2",
+              "color": "#FFFFFF",
+              "padding": 12,
+              "radius": 12,
+              "shadow": 2
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 11,
+                    "kind": "Badge",
+                    "props": {
+                      "color": "#12B76A",
+                      "label": "Eased"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 12,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#101828",
+                      "size": 12,
+                      "value": "The slider readout fades in smoothly"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 10,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 10
+                }
+              }
+            ],
+            "events": {},
+            "id": 9,
+            "kind": "Container",
+            "props": {
+              "animate": "spring",
+              "border": "#E4E9F2",
+              "color": "#FFFFFF",
+              "padding": 12,
+              "radius": 12,
+              "shadow": 2
+            }
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 15,
+                    "kind": "Badge",
+                    "props": {
+                      "color": "#F79009",
+                      "label": "Inertia"
+                    }
+                  },
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 16,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#101828",
+                      "size": 12,
+                      "value": "Discrete steps under one shared clock"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 14,
+                "kind": "Row",
+                "props": {
+                  "align": "center",
+                  "gap": 10
+                }
+              }
+            ],
+            "events": {},
+            "id": 13,
+            "kind": "Container",
+            "props": {
+              "animate": "spring",
+              "border": "#E4E9F2",
+              "color": "#FFFFFF",
+              "padding": 12,
+              "radius": 12,
+              "shadow": 2
+            }
+          }
+        ],
+        "events": {},
+        "id": 4,
+        "kind": "Column",
+        "props": {
+          "gap": 8
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 19,
+                "kind": "Text",
+                "props": {
+                  "color": "#101828",
+                  "size": 13,
+                  "value": "Delivery speed"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 20,
+                "kind": "Spacer",
+                "props": {
+                  "width": 40
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [],
+                    "events": {},
+                    "id": 22,
+                    "kind": "Text",
+                    "props": {
+                      "color": "#097FEB",
+                      "size": 13,
+                      "value": "{level}"
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 21,
+                "kind": "Container",
+                "props": {
+                  "animate": "ease",
+                  "border": "#EAF3FF",
+                  "color": "#EAF3FF",
+                  "padding": 6,
+                  "radius": 8
+                }
+              }
+            ],
+            "events": {},
+            "id": 18,
+            "kind": "Row",
+            "props": {
+              "align": "center",
+              "gap": 10
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 23,
+            "kind": "Spacer",
+            "props": {
+              "height": 8
+            }
+          },
+          {
+            "children": [],
+            "events": {
+              "input": {
+                "op": "set",
+                "target": "level"
+              }
+            },
+            "id": 24,
+            "kind": "Slider",
+            "props": {
+              "bind": "level",
+              "label": "Delivery speed",
+              "max": 100,
+              "min": 0
+            }
+          }
+        ],
+        "events": {},
+        "id": 17,
+        "kind": "Container",
+        "props": {
+          "border": "#E4E9F2",
+          "color": "#FFFFFF",
+          "padding": 12,
+          "radius": 12,
+          "shadow": 2
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 27,
+                "kind": "Text",
+                "props": {
+                  "color": "#101828",
+                  "size": 13,
+                  "value": "Order details"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 28,
+                "kind": "Spacer",
+                "props": {
+                  "width": 40
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "op": "toggle",
+                    "target": "open"
+                  }
+                },
+                "id": 29,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "label": "Toggle",
+                  "padding": 8,
+                  "radius": 8,
+                  "shadow": 2
+                }
+              }
+            ],
+            "events": {},
+            "id": 26,
+            "kind": "Row",
+            "props": {
+              "align": "center",
+              "gap": 10
+            }
+          },
+          {
+            "children": [],
+            "events": {},
+            "id": 30,
+            "kind": "Spacer",
+            "props": {
+              "height": 8
+            },
+            "when": "open"
+          },
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 32,
+                "kind": "Text",
+                "props": {
+                  "color": "#101828",
+                  "size": 12,
+                  "value": "Express shipping"
+                },
+                "when": "open"
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 33,
+                "kind": "Text",
+                "props": {
+                  "color": "#667085",
+                  "size": 11,
+                  "value": "Dispatched in 24 hours"
+                },
+                "when": "open"
+              }
+            ],
+            "events": {},
+            "id": 31,
+            "kind": "Container",
+            "props": {
+              "animate": "spring",
+              "border": "#E4E9F2",
+              "color": "#F4F7FB",
+              "padding": 12,
+              "radius": 10
+            },
+            "when": "open"
+          }
+        ],
+        "events": {},
+        "id": 25,
+        "kind": "Container",
+        "props": {
+          "border": "#E4E9F2",
+          "color": "#FFFFFF",
+          "padding": 12,
+          "radius": 12,
+          "shadow": 2
+        }
+      }
+    ],
+    "events": {},
+    "id": 0,
+    "kind": "Column",
+    "props": {
+      "gap": 12,
+      "padding": 16
+    }
+  }
+}

@@ -47,6 +47,11 @@ import javax.crypto.spec.SecretKeySpec;
 public final class MainActivity extends Activity {
 
     private static final String GRAPHICS_IR = "dashboard.opuir.json";
+    /** Intent extra selecting which packaged IR asset drives the self-drawn frame. */
+    private static final String IR_EXTRA = "org.opurom.mobile.IR";
+    /** Packaged IR filenames only; no separators, so a hostile extra cannot escape assets. */
+    private static final java.util.regex.Pattern IR_NAME =
+            java.util.regex.Pattern.compile("[A-Za-z0-9_-]+\\.opuir\\.json");
     private static final int MAX_FRAME_PIXELS = 1024;
 
     // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
@@ -122,7 +127,7 @@ public final class MainActivity extends Activity {
         resolvePalette();
 
         System.loadLibrary("opurom_mobile");
-        graphicsIr = readAsset(GRAPHICS_IR);
+        graphicsIr = readAsset(selectedIrAsset());
 
         getWindow().setStatusBarColor(dark ? 0xFF0B1220 : 0xFF097FEB);
         getWindow().setNavigationBarColor(background);
@@ -351,6 +356,9 @@ public final class MainActivity extends Activity {
     }
 
     private View buildFrameCard() {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+
         FrameLayout holder = new FrameLayout(this);
         GradientDrawable shape = new GradientDrawable();
         shape.setColor(card);
@@ -360,6 +368,8 @@ public final class MainActivity extends Activity {
         holder.setElevation(dp(6));
 
         frameView = new ImageView(this);
+        // The frame is rendered at the view's measured size, so FIT_XY maps
+        // pixel-for-pixel without distortion.
         frameView.setScaleType(ImageView.ScaleType.FIT_XY);
         frameView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         holder.addView(frameView, new FrameLayout.LayoutParams(
@@ -369,21 +379,21 @@ public final class MainActivity extends Activity {
         // whenever the measured viewport changes so the frame stays tier-sized.
         frameView.addOnLayoutChangeListener((view, left, top, right, bottom,
                 oldLeft, oldTop, oldRight, oldBottom) -> renderFrameIfSizeChanged());
-
-        // Native typography sits above the self-drawn frame: this is the
-        // documented hybrid mode, not a second renderer.
-        LinearLayout overlay = column(dp(14));
-        overlay.setGravity(Gravity.BOTTOM);
-        TextView caption = label("OPUROM / NATIVE HYBRID", 11,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFFFFFFFF);
-        caption.setLetterSpacing(0.14f);
-        caption.setShadowLayer(dp(2), 0, dp(1), 0x88000000);
-        overlay.addView(caption);
-        holder.addView(overlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
         frameView.post(this::renderFrame);
-        return holder;
+        column.addView(holder);
+
+        // Native typography sits below the self-drawn frame, never on top of
+        // it: deep ink on the surface keeps the hybrid caption readable over
+        // any rendered background without overlapping the frame's own text.
+        TextView caption = label("OPUROM / NATIVE HYBRID", 11,
+                Typeface.create("sans-serif-medium", Typeface.NORMAL), 0xFF5A6478);
+        caption.setLetterSpacing(0.14f);
+        LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        captionParams.topMargin = dp(10);
+        captionParams.gravity = Gravity.CENTER_HORIZONTAL;
+        column.addView(caption, captionParams);
+        return column;
     }
 
     private View buildStatsCard() {
@@ -793,6 +803,15 @@ public final class MainActivity extends Activity {
                 getResources().getDisplayMetrics());
     }
 
+    /** Resolve the requested IR asset from the launch intent, with a safe default. */
+    private String selectedIrAsset() {
+        String requested = getIntent() == null ? null : getIntent().getStringExtra(IR_EXTRA);
+        if (requested == null || !IR_NAME.matcher(requested).matches()) {
+            return GRAPHICS_IR;
+        }
+        return requested;
+    }
+
     private byte[] readAsset(String name) {
         try (InputStream input = getAssets().open(name)) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -803,6 +822,9 @@ public final class MainActivity extends Activity {
             }
             return unseal(bytes.toByteArray(), name);
         } catch (IOException error) {
+            if (!GRAPHICS_IR.equals(name)) {
+                return readAsset(GRAPHICS_IR);
+            }
             throw new IllegalStateException("cannot read IR asset " + name, error);
         }
     }

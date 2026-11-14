@@ -1,0 +1,430 @@
+{
+  "app": "Form",
+  "ir": "0.1",
+  "state": [
+    {
+      "init": "Ada",
+      "name": "name",
+      "type": "string"
+    },
+    {
+      "init": 36,
+      "name": "age",
+      "type": "int"
+    },
+    {
+      "init": false,
+      "name": "subscribed",
+      "type": "bool"
+    }
+  ],
+  "theme": {
+    "accent": "#097FEB",
+    "mode": "light",
+    "radius": 12,
+    "tokens": {
+      "stage": "#F4F6F9"
+    }
+  },
+  "tree": {
+    "children": [
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 3,
+                "kind": "Image",
+                "props": {
+                  "border": "#D6E7FC",
+                  "color": "#EAF3FE",
+                  "height": 28,
+                  "label": "OPUROM brand",
+                  "radius": 8,
+                  "src": "opurom-examples/assets/opurom-logo.png",
+                  "width": 28
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 4,
+                "kind": "Text",
+                "props": {
+                  "color": "#101828",
+                  "role": "heading",
+                  "size": 14,
+                  "value": "Account setup"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 5,
+                "kind": "Text",
+                "props": {
+                  "color": "#667085",
+                  "size": 10,
+                  "value": "A few details to personalize your workspace"
+                }
+              }
+            ],
+            "events": {},
+            "id": 2,
+            "kind": "Column",
+            "props": {
+              "align": "center",
+              "border": "#FFFFFF",
+              "color": "#FFFFFF",
+              "gap": 4
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Container",
+        "props": {
+          "border": "#E2E8F0",
+          "color": "#FFFFFF",
+          "height": 84,
+          "padding": 10,
+          "radius": 14,
+          "shadow": 1
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 8,
+                "kind": "Text",
+                "props": {
+                  "color": "#344054",
+                  "role": "heading",
+                  "size": 11,
+                  "value": "Profile details"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 9,
+                "kind": "Text",
+                "props": {
+                  "color": "#667085",
+                  "size": 9,
+                  "value": "Display name"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "input": {
+                    "op": "set",
+                    "target": "name"
+                  }
+                },
+                "id": 10,
+                "kind": "Input",
+                "props": {
+                  "bind": "name",
+                  "border": "#D8E0EA",
+                  "color": "#F8FAFC",
+                  "fontScale": 0.6,
+                  "label": "Display name",
+                  "padding": 8,
+                  "placeholder": "Alex Morgan",
+                  "radius": 8
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 11,
+                "kind": "Text",
+                "props": {
+                  "color": "#667085",
+                  "size": 9,
+                  "value": "Years of experience"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "input": {
+                    "op": "set",
+                    "target": "age"
+                  }
+                },
+                "id": 12,
+                "kind": "Slider",
+                "props": {
+                  "bind": "age",
+                  "border": "#E2E8F0",
+                  "color": "#E2E8F0",
+                  "label": "Years of experience",
+                  "max": 100,
+                  "min": 0
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 13,
+                "kind": "Divider",
+                "props": {}
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 16,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#344054",
+                          "size": 10,
+                          "value": "Name: {name}"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 17,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#667085",
+                          "size": 10,
+                          "value": "Years: {age}"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 15,
+                    "kind": "Column",
+                    "props": {
+                      "border": "#F8FAFC",
+                      "color": "#F8FAFC",
+                      "gap": 2
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 14,
+                "kind": "Container",
+                "props": {
+                  "border": "#E2E8F0",
+                  "color": "#F8FAFC",
+                  "height": 36,
+                  "padding": 8,
+                  "radius": 8
+                }
+              }
+            ],
+            "events": {},
+            "id": 7,
+            "kind": "Column",
+            "props": {
+              "border": "#FFFFFF",
+              "color": "#FFFFFF",
+              "gap": 8
+            }
+          }
+        ],
+        "events": {},
+        "id": 6,
+        "kind": "Container",
+        "props": {
+          "border": "#E2E8F0",
+          "color": "#FFFFFF",
+          "height": 200,
+          "padding": 14,
+          "radius": 14,
+          "shadow": 2
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 22,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#344054",
+                          "role": "heading",
+                          "size": 10,
+                          "value": "Product updates"
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 23,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#667085",
+                          "size": 9,
+                          "value": "Optional release notes"
+                        }
+                      }
+                    ],
+                    "events": {},
+                    "id": 21,
+                    "kind": "Column",
+                    "props": {
+                      "border": "#FFFFFF",
+                      "color": "#FFFFFF",
+                      "gap": 4
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 20,
+                "kind": "Container",
+                "props": {
+                  "border": "#FFFFFF",
+                  "color": "#FFFFFF",
+                  "height": 52,
+                  "padding": 0
+                }
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [],
+                        "events": {
+                          "tap": {
+                            "op": "toggle",
+                            "target": "subscribed"
+                          }
+                        },
+                        "id": 26,
+                        "kind": "Button",
+                        "props": {
+                          "color": "#097FEB",
+                          "fontScale": 0.6,
+                          "label": "Toggle subscription",
+                          "padding": 8,
+                          "radius": 8,
+                          "shadow": 1
+                        }
+                      },
+                      {
+                        "children": [],
+                        "events": {},
+                        "id": 27,
+                        "kind": "Text",
+                        "props": {
+                          "color": "#097FEB",
+                          "size": 9,
+                          "value": "Subscribed as {name}"
+                        },
+                        "when": "subscribed"
+                      }
+                    ],
+                    "events": {},
+                    "id": 25,
+                    "kind": "Column",
+                    "props": {
+                      "align": "center",
+                      "border": "#FFFFFF",
+                      "color": "#FFFFFF",
+                      "gap": 4
+                    }
+                  }
+                ],
+                "events": {},
+                "id": 24,
+                "kind": "Container",
+                "props": {
+                  "border": "#FFFFFF",
+                  "color": "#FFFFFF",
+                  "height": 52,
+                  "padding": 0
+                }
+              }
+            ],
+            "events": {},
+            "id": 19,
+            "kind": "Grid",
+            "props": {
+              "columns": 2
+            }
+          }
+        ],
+        "events": {},
+        "id": 18,
+        "kind": "Container",
+        "props": {
+          "border": "#E2E8F0",
+          "color": "#FFFFFF",
+          "height": 72,
+          "padding": 8,
+          "radius": 14,
+          "shadow": 1
+        }
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [],
+                "events": {},
+                "id": 30,
+                "kind": "Text",
+                "props": {
+                  "color": "#98A2B3",
+                  "size": 9,
+                  "value": "Changes save automatically"
+                }
+              }
+            ],
+            "events": {},
+            "id": 29,
+            "kind": "Column",
+            "props": {
+              "align": "center",
+              "border": "#F4F6F9",
+              "color": "#F4F6F9"
+            }
+          }
+        ],
+        "events": {},
+        "id": 28,
+        "kind": "Container",
+        "props": {
+          "border": "#F4F6F9",
+          "color": "#F4F6F9",
+          "height": 20,
+          "padding": 0
+        }
+      }
+    ],
+    "events": {},
+    "id": 0,
+    "kind": "Column",
+    "props": {
+      "border": "#F4F6F9",
+      "color": "#F4F6F9",
+      "gap": 16,
+      "padding": 24
+    }
+  }
+}

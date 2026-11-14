@@ -391,13 +391,20 @@ exported from each `.so`.
   are moved between views instead of rebuilt, so one set of state is on screen at a time. The
   frame card is taller at each wider tier and the frame is re-rendered whenever its measured
   viewport changes, so the same APK fills its card at every width without letterboxing.
+- The APK carries several compiled programs in `android/app/src/main/assets/`. The launch
+  intent selects which one drives the self-drawn frame through the
+  `org.opurom.mobile.IR` string extra, for example
+  `adb shell am start -n org.opurom.mobile/.MainActivity --es org.opurom.mobile.IR counter.opuir.json`.
+  Only packaged `<name>.opuir.json` filenames are accepted; an absent or malformed value falls
+  back to `dashboard.opuir.json`. Each program is compiled from the corresponding
+  `../opurom-examples/<name>.opu` and sealed with the same asset key before packaging.
 - `android/app/src/main/assets/dashboard.opuir.json` is a graphics-only IR: gradient header,
   particle field and rounded cards with shadows. The self-drawn frame renders through JNI into
   the card's actual viewport, so it fills the card instead of sitting at a fixed size. The host
   keeps one persistent renderer per viewport, so a state change recomputes only the renderer's
-  dirty region and leaves the rest of the previous frame. Native text is layered above the
-  frame, which is the documented hybrid mode: self-drawn graphics
-  plus native controls.
+  dirty region and leaves the rest of the previous frame. The hybrid caption sits below the
+  self-drawn frame in deep ink on the surface, so native typography stays readable over any
+  rendered background without overlapping the frame's own text.
 - `android/app/src/main/assets/todo.opuir.json` is the exact output of
   `opuromc compile ../opurom-examples/todo.opu`; `verify.mjs` recompiles the source and compares
   byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.
