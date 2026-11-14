@@ -7,6 +7,7 @@
   "scripts": {
     "verify": "node verify.mjs",
     "build:apk": "node build-apk.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "smoke:emulator": "node smoke-emulator.mjs"
   }
 }
