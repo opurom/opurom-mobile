@@ -791,11 +791,14 @@ public final class MainActivity extends Activity {
 
     // The frame is taller as more vertical room appears: the desktop tier has
     // room for the rail, the renderer column and the detail column side by side.
+    // A compact frame stacks the whole tree into one column, so it needs more
+    // height than the desktop tiers to show more than the first card; the page
+    // itself scrolls, so a taller frame never pushes the actions off screen.
     private int frameHeight() {
         int tier = layoutTier(getResources().getConfiguration().screenWidthDp);
         if (tier == TIER_THREE_COLUMN) return 300;
-        if (tier == TIER_TWO_COLUMN) return 230;
-        return 200;
+        if (tier == TIER_TWO_COLUMN) return 260;
+        return 320;
     }
 
     private int dp(float value) {
