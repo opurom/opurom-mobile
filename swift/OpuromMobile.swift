@@ -167,10 +167,10 @@ public enum OpuromPlatformView {
     /// Decodes the shared 8-byte `OPV1` little-endian frame, or `nil` when invalid.
     public static func decodeHandle(_ bytes: [UInt8]) -> UInt32? {
         var handle: UInt32 = 0
-        guard bytes.withUnsafeBufferPointer {
-                opu_platform_view_decode_handle($0.baseAddress, UInt($0.count), &handle) ==
-                    Int32(OPU_PLATFORM_VIEW_OK)
-            } else {
+        let ok = bytes.withUnsafeBufferPointer {
+            opu_platform_view_decode_handle($0.baseAddress, $0.count, &handle)
+        }
+        guard ok == Int32(OPU_PLATFORM_VIEW_OK) else {
             return nil
         }
         return handle
