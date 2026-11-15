@@ -114,12 +114,27 @@ if (fatal.length) fail('app logged a fatal exception', fatal.slice(0, 6).join('\
 else pass('no fatal exception in logcat tail');
 
 // 5. Screenshot is a non-trivial PNG (real pixels, not a blank frame).
+// A headless swiftshader emulator drops adb mid-capture, so retry and verify
+// the PNG end marker to reject a truncated frame instead of failing once.
+function validPng(buf) {
+  if (!buf || buf.length < 1000) return false;
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (!buf.subarray(0, 8).equals(sig)) return false;
+  // IEND chunk (49 45 4e 44 ae 42 60 82) must close the stream.
+  return buf.subarray(-8).equals(Buffer.from([0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]));
+}
 function grab(name) {
   const dest = path.join(OUT, name);
-  const png = run(adb, ['-s', device, 'exec-out', 'screencap', '-p'], { encoding: 'buffer', timeout: 60_000 });
-  if (png.status !== 0 || !png.stdout || png.stdout.length < 1000) return null;
-  writeFileSync(dest, png.stdout);
-  return { path: dest, bytes: png.stdout.length };
+  for (let i = 0; i < 8; i += 1) {
+    const png = run(adb, ['-s', device, 'exec-out', 'screencap', '-p'], { encoding: 'buffer', timeout: 60_000 });
+    if (png.status === 0 && validPng(png.stdout)) {
+      writeFileSync(dest, png.stdout);
+      return { path: dest, bytes: png.stdout.length };
+    }
+    run(adb, ['reconnect', 'offline']);
+    sleepMs(1500);
+  }
+  return null;
 }
 const shot = grab('screen.png');
 if (!shot) fail('screencap produced no usable PNG');
