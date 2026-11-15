@@ -19,6 +19,9 @@
     }
   ],
   "app": "TodoApp",
+  "imports": [
+    "pkg-theme/default.opu"
+  ],
   "ir": "0.1.0",
   "models": [
     {
@@ -53,9 +56,15 @@
     }
   ],
   "theme": {
-    "accent": "#097FEB",
+    "accent": "#007AFF",
+    "fontScale": 1.0,
     "mode": "light",
-    "radius": 14
+    "radius": 12,
+    "tokens": {
+      "onSurface": "#111827",
+      "stage": "#F9FAFB",
+      "surface": "#FFFFFF"
+    }
   },
   "tree": {
     "children": [
@@ -78,7 +87,7 @@
             "id": 3,
             "kind": "Text",
             "props": {
-              "color": "#D6E8FF",
+              "color": "#FFFFFF",
               "size": 11,
               "value": "UI, model and API in one source file"
             }
@@ -89,7 +98,7 @@
         "kind": "Container",
         "props": {
           "animate": "ease",
-          "gradient": "#097FEB,#043B70",
+          "color": "#097FEB",
           "padding": 16,
           "radius": 16,
           "shadow": 4
@@ -103,7 +112,7 @@
             "id": 5,
             "kind": "Text",
             "props": {
-              "color": "#667085",
+              "color": "#6B7280",
               "size": 11,
               "value": "Remaining"
             }
@@ -161,7 +170,7 @@
             "id": 8,
             "kind": "Row",
             "props": {
-              "color": "#F4F7FB",
+              "color": "#F9FAFB",
               "gap": 10
             }
           }
@@ -170,7 +179,7 @@
         "id": 7,
         "kind": "Container",
         "props": {
-          "color": "#F4F7FB",
+          "color": "#F9FAFB",
           "padding": 10,
           "radius": 14,
           "shadow": 3
