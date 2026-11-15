@@ -56,6 +56,9 @@ jobs:
                 git clone --depth 1 "https://github.com/opurom/${repo}.git" "$repo"
               done
               ;;
+            opurom-mobile)
+              git clone --depth 1 "https://github.com/opurom/opurom-render.git" opurom-render
+              ;;
             *) ;;
           esac
       - name: Run ${{ matrix.check }}
