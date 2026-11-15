@@ -35,8 +35,8 @@ import java.util.Arrays;
 import java.util.Deque;
 
 import javax.crypto.Cipher;
-import javax.crypto.contract.GCMParameterSpec;
-import javax.crypto.contract.SecretKeySpec;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Opurom Android host: a native adaptive shell around one self-drawn Opurom

@@ -17,6 +17,20 @@
 #include "opurom.h"
 #include "platform_view.h"
 
+/*
+ * JNI_OnLoad exports a load-time anchor. JNI resolves entry points by dynamic
+ * linker name lookup, so the Java_* functions need no registration; the anchor
+ * makes a successful dlopen unambiguous. The Rust side builds with
+ * panic=unwind and catches every panic across the FFI boundary (see the
+ * ffi_guard calls in src/lib.rs), so a panic unwinds to Rust and returns
+ * OPU_ERR_PANIC instead of aborting the process at load time.
+ */
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)vm;
+    (void)reserved;
+    return JNI_VERSION_1_6;
+}
+
 JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuStateNew(JNIEnv *env,
                                                                          jclass clazz) {
     (void)env;

@@ -247,7 +247,7 @@ function classFiles(dir) {
 }
 
 r = run('d8', [
-  java, '-cp', d8Jar, 'com.android.tools.capability.D8', '--lib', androidJar,
+  java, '-cp', d8Jar, 'com.android.tools.r8.D8', '--lib', androidJar,
   '--min-api', '24', '--output', dexWork,
   ...classFiles(classesDir),
 ]);

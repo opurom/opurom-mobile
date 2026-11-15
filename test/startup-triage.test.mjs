@@ -10,11 +10,17 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 
 import {
   EXPECTED_EXPORTS, layerLinkage, layerManifest, layerPackageAbi,
   layerRuntimeContract, loadArtifact, parseManifestText, readElf, triage,
+  unsealIrAsset, validateIrAsset,
 } from '../lib/startup-triage.mjs';
+
+// Same derivation as lib/startup-triage.mjs and MainActivity; the seal test
+// encrypts with it and the tool under test decrypts with its own copy.
+const IR_ASSET_KEY = createHash('sha256').update('opurom-mobile-asset-key-v1').digest();
 
 const EM_AARCH64 = 183;
 const EM_X86_64 = 62;
@@ -291,4 +297,21 @@ test('parseManifestText reads an aapt2 dump xmltree manifest', () => {
   assert.equal(parsed.hasLauncher, true);
   assert.equal(parsed.targetSdk, 34, 'falls back to compileSdkVersion when targetSdk absent');
   assert.equal(parsed.activityCount, 1);
+});
+
+// The APK seals IR assets with AES-256-GCM (build-apk.mjs); layer 4 must decode
+// the sealed form like MainActivity.unseal does, and must still pass plaintext
+// assets through unchanged.
+test('unsealIrAsset decodes sealed assets and passes plaintext through', () => {
+  const plain = Buffer.from(JSON.stringify({ ir: '0.1.0', app: 'T', tree: { id: 0, kind: 'Column' } }));
+  assert.equal(unsealIrAsset(plain), plain.toString('utf8'), 'plaintext asset passes through');
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', IR_ASSET_KEY, iv);
+  const sealed = Buffer.concat([
+    Buffer.from('OPU1'), iv, cipher.update(plain), cipher.final(), cipher.getAuthTag(),
+  ]);
+  const validated = validateIrAsset(unsealIrAsset(sealed));
+  assert.equal(validated.ok, true, JSON.stringify(validated));
+  sealed[sealed.length - 1] ^= 0xff; // flip one auth-tag bit: GCM must reject
+  assert.throws(() => unsealIrAsset(sealed), 'a tampered seal must fail loudly');
 });

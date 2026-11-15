@@ -477,6 +477,8 @@ if (!ndk) {
 
     // The NDK clang links the JNI shim together with the Rust archive into
     // one shared object; --whole-archive keeps the C ABI symbols reachable.
+    // max-page-size=16384 aligns every PT_LOAD to 16 KB so the library loads on
+    // 16 KB-page devices; targetSdk 35+ rejects a 4 KB-aligned .so at dlopen.
     const link = run(`${abi} clang -shared`, [
       clang, '-shared', '-fPIC', '-O2',
       '-I', path.join(ROOT, 'jni'),
@@ -484,6 +486,7 @@ if (!ndk) {
       '-o', soPath,
       path.join(ROOT, 'jni', 'opurom_jni.c'),
       '-Wl,--whole-archive', staticlib, '-Wl,--no-whole-archive',
+      '-Wl,-z,max-page-size=16384',
       '-llog',
     ], { timeoutMs: 180000 });
     if (!link.ok) {
@@ -575,6 +578,21 @@ if (!ndk) {
     } else {
       fail(`${abi} shared object is missing exported symbols: ${missing.join(', ')}`,
         dynsyms.stdout);
+    }
+
+    // Every PT_LOAD must be 16 KB-aligned so the library loads on a 16 KB-page
+    // device; a 4 KB (0x1000) segment aborts at dlopen once targetSdk is 35+.
+    const segments = run('llvm-readelf -l', [ndkReadelf, '-l', soPath], { timeoutMs: 30000 });
+    const loadAligns = [...segments.stdout.matchAll(/LOAD\s+.*?(0x[0-9a-fA-F]+)\s*$/gm)]
+      .map((match) => parseInt(match[1], 16));
+    const underAligned = loadAligns.filter((align) => align < 0x4000);
+    if (!segments.ok || loadAligns.length === 0) {
+      fail(`llvm-readelf -l found no PT_LOAD segments for ${abi}`, segments.stdout || segments.stderr);
+    } else if (underAligned.length > 0) {
+      fail(`${abi} PT_LOAD alignment is below 16 KB (${underAligned.map((a) => `0x${a.toString(16)}`).join(', ')}); a 16 KB-page device aborts at dlopen`,
+        segments.stdout);
+    } else {
+      pass(`${abi} all ${loadAligns.length} PT_LOAD segments are 16 KB-aligned (0x4000)`);
     }
   }
 }
@@ -744,7 +762,7 @@ if (!d8Jar || !existsSync(d8Jar)) {
   const d8Work = path.join(WORK, 'd8');
   mkdirSync(d8Work, { recursive: true });
   const d8Run = run('d8', [
-    java, '-cp', d8Jar, 'com.android.tools.capability.D8',
+    java, '-cp', d8Jar, 'com.android.tools.r8.D8',
     ...(platform ? ['--lib', platform.jar] : []),
     '--output', d8Work,
     path.join(appClassesDir, 'org', 'opurom', 'mobile', 'OpuromNative.class'),
