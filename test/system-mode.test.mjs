@@ -49,3 +49,37 @@ test('resolving system mode preserves every other IR byte', () => {
   const explicit = readFileSync(path.join(ASSETS, 'dashboard.opuir.json'), 'utf8');
   assert.ok(!pattern.test(explicit), 'an explicit light IR is not touched');
 });
+
+// The self-drawn frame defaults to `fixed` metrics (one blank advance per
+// glyph), which reads as broken letter spacing on large headings. The host
+// opts an IR into proportional metrics at load time unless it already declares
+// one. This checks resolveFontMetrics against the packaged assets the same way
+// the Java helper is invoked in onCreate.
+test('the adapter opts an IR into proportional metrics unless one is declared', () => {
+  assert.match(SOURCE, /resolveFontMetrics\(resolveSystemMode\(readAsset\(selectedIrAsset\(\)\), dark\)\)/,
+    'onCreate injects default metrics after resolving the system mode');
+  const FONT_METRICS = /"fontMetrics"\s*:\s*"proportional"/;
+  const THEME_OPEN = /"theme"\s*:\s*\{/g;
+
+  const inject = (text) => {
+    if (FONT_METRICS.test(text)) return text;
+    const opening = new RegExp(THEME_OPEN.source).exec(text);
+    if (!opening) return text;
+    const end = opening.index + opening[0].length;
+    return `${text.slice(0, end)}"fontMetrics": "proportional",${text.slice(end)}`;
+  };
+
+  for (const name of ['dashboard.opuir.json', 'todo.opuir.json', 'typography.opuir.json']) {
+    const text = readFileSync(path.join(ASSETS, name), 'utf8');
+    assert.ok(!FONT_METRICS.test(text), `${name} ships without an explicit metrics key`);
+    const injected = inject(text);
+    const before = JSON.parse(text);
+    const after = JSON.parse(injected);
+    assert.equal(after.theme.fontMetrics, 'proportional', `${name} opts into proportional metrics`);
+    delete after.theme.fontMetrics;
+    assert.deepEqual(after, before, `${name} keeps every other field unchanged`);
+  }
+
+  const already = '{"theme":{"fontMetrics":"proportional","mode":"light"}}';
+  assert.equal(inject(already), already, 'an IR that already declares metrics is untouched');
+});

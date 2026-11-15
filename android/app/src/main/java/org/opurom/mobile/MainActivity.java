@@ -58,6 +58,9 @@ public final class MainActivity extends Activity {
             java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"system\"");
     private static final java.util.regex.Pattern FONT_METRICS =
             java.util.regex.Pattern.compile("\"fontMetrics\"\\s*:\\s*\"proportional\"");
+    /** Opens the `theme` object so a default metrics key can be injected right after it. */
+    private static final java.util.regex.Pattern THEME_OPEN =
+            java.util.regex.Pattern.compile("\"theme\"\\s*:\\s*\\{");
     private static final int MAX_FRAME_PIXELS = 1024;
 
     // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
@@ -149,7 +152,7 @@ public final class MainActivity extends Activity {
         resolvePalette();
 
         System.loadLibrary("opurom_mobile");
-        graphicsIr = resolveSystemMode(readAsset(selectedIrAsset()), dark);
+        graphicsIr = resolveFontMetrics(resolveSystemMode(readAsset(selectedIrAsset()), dark));
         initialRoute = OpuromNative.initialRoute(graphicsIr);
         applyThemeTokens(new String(graphicsIr, StandardCharsets.UTF_8));
 
@@ -1014,6 +1017,27 @@ public final class MainActivity extends Activity {
             return ir;
         }
         return matcher.replaceFirst("\"mode\": \"dark\"")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    // The self-drawn frame defaults to `fixed` glyph metrics, which advances one
+    // full blank glyph column per character; that reads as broken letter spacing
+    // on the large headings ("T e l e m e t r y"). The host opts an IR into
+    // proportional metrics at load time unless it already declares a value, the
+    // same presentation rewrite resolveSystemMode applies to theme.mode. Only the
+    // theme metrics key is added; every other IR byte is preserved.
+    private static byte[] resolveFontMetrics(byte[] ir) {
+        String text = new String(ir, StandardCharsets.UTF_8);
+        if (FONT_METRICS.matcher(text).find()) {
+            return ir;
+        }
+        java.util.regex.Matcher opening = THEME_OPEN.matcher(text);
+        if (!opening.find()) {
+            return ir;
+        }
+        return (text.substring(0, opening.end())
+                + "\"fontMetrics\": \"proportional\","
+                + text.substring(opening.end()))
                 .getBytes(StandardCharsets.UTF_8);
     }
 
