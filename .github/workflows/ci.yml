@@ -58,6 +58,7 @@ jobs:
               ;;
             opurom-mobile)
               git clone --depth 1 "https://github.com/opurom/opurom-render.git" opurom-render
+              git clone --depth 1 "https://github.com/opurom/opurom-examples.git" opurom-examples
               ;;
             *) ;;
           esac
