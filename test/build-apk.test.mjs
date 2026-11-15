@@ -91,7 +91,10 @@ test('the built APK is signed, aligned, launchable and deterministic', (t) => {
 
   const verify = run([tools.apksigner, 'verify', '--verbose', OUTPUT], env);
   assert.ok(verify.ok && /Verifies/.test(verify.stdout), `apksigner verify failed: ${verify.stderr}`);
-  for (const scheme of ['v1', 'v2', 'v3']) {
+  // v2 and v3 are the mandatory modern signature schemes. v1 JAR signing is
+  // redundant above minSdkVersion 24 and apksigner skips it for a minSdk 24
+  // target, so only v2/v3 are required here.
+  for (const scheme of ['v2', 'v3']) {
     assert.match(verify.stdout, new RegExp(`Verified using ${scheme} scheme[^:]*: true`));
   }
 

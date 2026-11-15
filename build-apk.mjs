@@ -163,7 +163,11 @@ function encryptIrAssets(destDir) {
       writeFileSync(path.join(destDir, entry), data);
       continue;
     }
-    const iv = randomBytes(12);
+    // A deterministic IV derives from the asset name + plaintext so rebuilds are
+    // byte-identical (deterministic packaging is a hard requirement). GCM only
+    // needs the IV to be unique per key; content-derived IVs are unique across
+    // differing assets and stable for identical content.
+    const iv = createHash('sha256').update(entry).update(data).digest().subarray(0, 12);
     const cipher = createCipheriv('aes-256-gcm', ASSET_KEY, iv);
     const sealed = Buffer.concat([cipher.update(data), cipher.final()]);
     const tag = cipher.getAuthTag();
