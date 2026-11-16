@@ -135,6 +135,15 @@ public final class OpuromNative {
                                                 byte[] route, int elapsedMs, byte[] out,
                                                 int width, int height);
 
+    /**
+     * Sets ({@code on}=1, {@code nodeId}!=0) or clears ({@code on}=0) the caller-owned press
+     * phase. {@code pressStartTick} is the caller frame clock at touch down, {@code touchX/Y} the
+     * absolute canvas touch point (either negative for the node centre). The press never enters
+     * the state JSON; frames without a press are unchanged.
+     */
+    public static native int opuRendererSetPress(long renderer, int nodeId, long pressStartTick,
+                                                 long touchX, long touchY, int on);
+
     /** One-shot multi-page render; see {@link #opuRendererFrameRoute}. */
     public static native int opuFrameFromIrRoute(byte[] irJson, byte[] stateJson, byte[] route,
                                                  byte[] out, int width, int height);

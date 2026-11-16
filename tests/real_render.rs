@@ -533,6 +533,83 @@ fn timed_frame_at_advances_animation_clock() {
 }
 
 #[test]
+fn press_phase_changes_pixels_and_clears_byte_identically() {
+    // ANIMATION_AND_PHYSICS.md section 8: a press is a caller-owned phase; a
+    // press frame differs from the default, and clearing it restores the exact
+    // default bytes (golden safety). The touch point starts inside the ripple
+    // window so the frame at SETTLED carries a visible press.
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let mut out = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let default_frame = |out: &mut [u8]| {
+        opu_renderer_frame(
+            handle,
+            ANIMATED_IR.as_ptr(),
+            ANIMATED_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    let baseline = out.clone();
+
+    // A press 100 ms before the settled tick still paints ripple progress.
+    let mut pressed = false;
+    'find: for y in (8..HEIGHT as i64).step_by(24) {
+        for x in (8..WIDTH as i64).step_by(24) {
+            let node = opu_hit_test(
+                ANIMATED_IR.as_ptr(),
+                ANIMATED_IR.len(),
+                b"{}".as_ptr(),
+                2,
+                x as i32,
+                y as i32,
+                WIDTH,
+                HEIGHT,
+            );
+            if node == 0 {
+                continue;
+            }
+            assert_eq!(
+                opu_renderer_set_press(handle, node, SETTLED_MS - 100, x, y, 1),
+                OPU_OK
+            );
+            assert_eq!(default_frame(&mut out), OPU_OK);
+            if out != baseline {
+                pressed = true;
+                break 'find;
+            }
+        }
+    }
+    assert!(pressed, "an active press must alter the default frame");
+
+    // Clearing through either contract condition restores the exact bytes.
+    assert_eq!(
+        opu_renderer_set_press(handle, 0, SETTLED_MS - 100, 1, 1, 1),
+        OPU_OK,
+        "node_id 0 means no press"
+    );
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    assert_eq!(out, baseline, "cleared press restores the default frame");
+    opu_renderer_set_press(handle, 1, SETTLED_MS - 100, 1, 1, 1);
+    assert_eq!(
+        opu_renderer_set_press(handle, 1, 0, 1, 1, 0),
+        OPU_OK
+    );
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    assert_eq!(out, baseline, "on=0 restores the default frame");
+    assert_eq!(
+        opu_renderer_set_press(std::ptr::null_mut(), 1, 0, 1, 1, 1),
+        OPU_ERR_NULL,
+        "a null renderer is rejected"
+    );
+    opu_renderer_free(handle);
+}
+
+#[test]
 fn reusable_renderer_serves_route_frames() {
     let handle = opu_renderer_new(WIDTH, HEIGHT);
     assert!(!handle.is_null());

@@ -350,6 +350,19 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameAt(
                                      (OpuRenderer *)(intptr_t)renderer);
 }
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetPress(
+    JNIEnv *env, jclass clazz, jlong renderer, jint node_id, jlong press_start_tick,
+    jlong touch_x, jlong touch_y, jint on) {
+    (void)env;
+    (void)clazz;
+    if (renderer == 0) {
+        return (jint)OPU_ERR_NULL;
+    }
+    return (jint)opu_renderer_set_press((OpuRenderer *)(intptr_t)renderer, (uint32_t)node_id,
+                                        (int64_t)press_start_tick, (int64_t)touch_x,
+                                        (int64_t)touch_y, (int32_t)on);
+}
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray out) {
     jbyte *ir_bytes;

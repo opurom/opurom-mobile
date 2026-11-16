@@ -181,6 +181,17 @@ int32_t opu_text_spans(const uint8_t *ir_json, size_t ir_len,
 /* Opt-in graphics-only raster. Default frames keep their bitmap text. */
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
 
+/*
+ * Sets (on=1, node_id!=0) or clears (on=0 or node_id=0) the caller-owned press
+ * phase: press_start_tick is the caller animation clock at touch down, touch_x/y
+ * are absolute canvas coordinates of the press (either negative for the node
+ * centre). Press frames go through the renderer's press path; frames without a
+ * press are byte-identical to before. Never enters the state JSON or the IR.
+ */
+int32_t opu_renderer_set_press(OpuRenderer *renderer, uint32_t node_id,
+                               int64_t press_start_tick, int64_t touch_x, int64_t touch_y,
+                               int32_t on);
+
 int32_t opu_frame_from_ir_suppressed(const uint8_t *ir_json, size_t ir_len,
                                      const uint8_t *state_json, size_t state_len,
                                      uint8_t *out, uint32_t width, uint32_t height);

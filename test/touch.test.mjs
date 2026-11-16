@@ -53,6 +53,18 @@ test('press phase is captured on DOWN and released on UP or CANCEL', () => {
   assert.equal(seams.length, 1, 'the renderer press seam is a single function');
 });
 
+test('the press phase reaches the renderer through the setter ABI', () => {
+  assert.match(ACTIVITY,
+    /OpuromNative\.opuRendererSetPress\(renderer, on \? phase\.node : 0, elapsedMs,/);
+  assert.match(JAVA, /native int opuRendererSetPress\(/);
+  assert.ok(SHIM.includes('Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'));
+  assert.ok(VERIFY.includes("'Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'"));
+  assert.ok(ABI.includes('opu_renderer_set_press('));
+  assert.match(RUST, /pub extern "C" fn opu_renderer_set_press\(/);
+  assert.ok(VERIFY.includes("'opu_renderer_set_press'"));
+  assert.ok(!ACTIVITY.includes('shortcut: render-side press ABI'), 'the seam is wired, not stubbed');
+});
+
 test('the hit and tap ABI resolves through Java, C and Rust', () => {
   for (const name of ['opuHitTest', 'opuTapNode']) {
     const symbol = `Java_org_opurom_mobile_OpuromNative_${name}`;

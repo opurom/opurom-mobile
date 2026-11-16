@@ -562,6 +562,7 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIr',
       'Java_org_opurom_mobile_OpuromNative_opuRendererFrameRoute',
       'Java_org_opurom_mobile_OpuromNative_opuRendererFrameAt',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererSetPress',
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrRouteAt',
@@ -582,7 +583,8 @@ if (!ndk) {
       'opu_frame_from_ir_route', 'opu_renderer_frame_route', 'opu_renderer_frame_at',
       'opu_ir_initial_route', 'opu_ir_route_at',
       'opu_hit_test', 'opu_tap_node',
-      'opu_text_spans', 'opu_renderer_set_suppress_text', 'opu_frame_from_ir_suppressed',
+      'opu_text_spans', 'opu_renderer_set_suppress_text', 'opu_renderer_set_press',
+      'opu_frame_from_ir_suppressed',
     ];
     const missing = [...jniSymbols, ...abiSymbols]
       .filter((symbol) => !dynsyms.stdout.includes(symbol));

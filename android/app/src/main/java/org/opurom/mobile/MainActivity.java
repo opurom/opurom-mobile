@@ -119,12 +119,15 @@ public final class MainActivity extends Activity {
         @Override
         public void doFrame(long frameTimeNanos) {
             host.pumpQueued = false;
-            if (!host.animated) {
+            boolean held = host.press.isPressed();
+            if (!held && !host.animated) {
                 return;
             }
-            host.elapsedMs = Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
+            // While held the clock runs past settle so the ripple keeps advancing.
+            host.elapsedMs = held ? host.elapsedMs + FRAME_STEP_MS
+                    : Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
             host.renderFrame();
-            if (host.elapsedMs < ANIM_SETTLED_MS) {
+            if (held || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
                 host.pumpQueued = true;
                 Choreographer.getInstance().postFrameCallback(this);
             }
@@ -326,21 +329,26 @@ public final class MainActivity extends Activity {
                 rendererWidth, rendererHeight);
         press.down(node, x, y, SystemClock.uptimeMillis());
         Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
+        reportPressPhase(press, node != TouchPhase.NO_NODE, false);
         if (node != TouchPhase.NO_NODE) {
             pressHandler.removeCallbacks(longPressCheck);
             pressHandler.postDelayed(longPressCheck,
                     ViewConfiguration.getLongPressTimeout());
-            reportPressPhase(press, true, false);
         }
     }
 
     /** ACTION_UP/ACTION_CANCEL: close the press before the tap path runs. */
     private void onPressUp(boolean cancelled) {
         pressHandler.removeCallbacks(longPressCheck);
-        if (press.isPressed()) {
+        boolean held = press.isPressed();
+        if (held) {
             reportPressPhase(press, false, press.longPressed);
         }
         press.clear();
+        if (held) {
+            // One frame after release restores the unpressed look.
+            renderFrame();
+        }
         Log.d(PRESS_TAG, "up cancelled=" + cancelled);
     }
 
@@ -354,14 +362,20 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * Single seam that feeds the press phase to the renderer once its ripple
-     * ABI is fixed. Touch coords are the future ripple centre.
-     * shortcut: render-side press ABI is pending; this logs only, no state or
-     * ABI change, and the real call will replace this one body when it lands.
+     * Single seam feeding the caller-owned press phase to the renderer
+     * (ANIMATION_AND_PHYSICS.md 8). The touch point is the ripple centre and
+     * elapsedMs is the caller frame clock the ripple advances on.
      */
     private void reportPressPhase(TouchPhase phase, boolean on, boolean longPressed) {
+        int status = OpuromNative.opuRendererSetPress(renderer, on ? phase.node : 0, elapsedMs,
+                phase.x, phase.y, on ? 1 : 0);
         Log.d(PRESS_TAG, "phase node=" + phase.node + " on=" + on
-                + " long=" + longPressed + " x=" + phase.x + " y=" + phase.y);
+                + " long=" + longPressed + " x=" + phase.x + " y=" + phase.y
+                + " status=" + status);
+        if (on) {
+            // The ripple only moves while the frame clock runs.
+            startPump();
+        }
     }
 
     /** Maps a screen coordinate into the render viewport, then dispatches a tap. */
@@ -432,7 +446,9 @@ public final class MainActivity extends Activity {
             OpuromNative.opuRendererSuppressText(renderer, true);
         }
         int status;
-        if (renderer != 0 && animated) {
+        // Pressed frames need the caller clock so the ripple advances.
+        boolean clocked = animated || press.isPressed();
+        if (renderer != 0 && clocked) {
             status = OpuromNative.opuRendererFrameAt(renderer, graphicsIr, stateJson, null,
                     elapsedMs, pixels, width, height);
         } else if (renderer != 0) {
@@ -481,7 +497,7 @@ public final class MainActivity extends Activity {
     }
 
     private void startPump() {
-        if (!animated || pumpQueued) {
+        if ((!animated && !press.isPressed()) || pumpQueued) {
             return;
         }
         pumpQueued = true;
