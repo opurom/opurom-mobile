@@ -20,7 +20,10 @@
   ],
   "app": "TodoApp",
   "imports": [
-    "pkg-theme/default.opu"
+    "pkg-theme/default.opu",
+    "components/card.opu",
+    "components/text.opu",
+    "components/button.opu"
   ],
   "ir": "0.1.0",
   "models": [
@@ -76,7 +79,7 @@
             "id": 2,
             "kind": "Text",
             "props": {
-              "color": "#FFFFFF",
+              "color": "#132C5A",
               "size": 20,
               "value": "Opurom Todo"
             }
@@ -87,7 +90,7 @@
             "id": 3,
             "kind": "Text",
             "props": {
-              "color": "#FFFFFF",
+              "color": "#5A6478",
               "size": 11,
               "value": "UI, model and API in one source file"
             }
@@ -112,15 +115,29 @@
             "id": 5,
             "kind": "Text",
             "props": {
-              "color": "#6B7280",
-              "size": 11,
+              "color": "#132C5A",
+              "size": 16,
               "value": "Remaining"
             }
-          },
+          }
+        ],
+        "events": {},
+        "id": 4,
+        "kind": "Container",
+        "props": {
+          "border": "#DCE4EF",
+          "color": "#FFFFFF",
+          "padding": 16,
+          "radius": 14,
+          "shadow": 3
+        }
+      },
+      {
+        "children": [
           {
             "children": [],
             "events": {},
-            "id": 6,
+            "id": 7,
             "kind": "Text",
             "props": {
               "color": "#097FEB",
@@ -130,7 +147,7 @@
           }
         ],
         "events": {},
-        "id": 4,
+        "id": 6,
         "kind": "Container",
         "props": {
           "border": "#E4E9F2",
@@ -153,7 +170,7 @@
                     "value": 1
                   }
                 },
-                "id": 9,
+                "id": 10,
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
@@ -167,7 +184,7 @@
               }
             ],
             "events": {},
-            "id": 8,
+            "id": 9,
             "kind": "Row",
             "props": {
               "color": "#F9FAFB",
@@ -176,7 +193,7 @@
           }
         ],
         "events": {},
-        "id": 7,
+        "id": 8,
         "kind": "Container",
         "props": {
           "color": "#F9FAFB",
