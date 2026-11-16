@@ -1,5 +1,7 @@
 package org.opurom.mobile;
 
+import android.content.Context;
+
 /**
  * Java-side declaration of the Opurom mobile C ABI.
  *
@@ -50,6 +52,21 @@ public final class OpuromNative {
     public static final int PLATFORM_VIEW_EVENT_RELEASE = 2;
     public static final int PLATFORM_VIEW_EVENT_MOVE = 3;
     public static final int PLATFORM_VIEW_EVENT_FOCUS = 4;
+
+    /*
+     * Native capability call surface. Each method returns a CapabilityStatus code
+     * and never throws for a device condition; the C shim delegates to the Java
+     * bridge of the same capability so typed errors survive the round trip.
+     * These are the seam the IR PlatformCall lowering targets.
+     */
+    public static native int opuNotifyPost(Context context, int id, String channel,
+                                           String title, String body);
+
+    public static native int opuNotifyCancel(Context context, int id);
+
+    public static native int opuCameraCapture(Context context);
+
+    public static native int opuLocationGet(Context context, double[] out);
 
     private OpuromNative() {
     }

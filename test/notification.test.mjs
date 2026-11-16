@@ -112,6 +112,7 @@ test('the Android notification bridge passes input and error-order checks on a J
   writeFileSync(harnessFile, HARNESS);
   const classes = path.join(work, 'classes');
   execFileSync(javac, ['--release', '17', '-cp', androidJar, '-d', classes,
+    path.join(SRC, 'CapabilityStatus.java'),
     path.join(SRC, 'NotificationBridge.java'), path.join(SRC, 'PermissionBridge.java'),
     harnessFile], { stdio: 'pipe' });
   const out = execFileSync(javac.replace(/javac$/, 'java'),

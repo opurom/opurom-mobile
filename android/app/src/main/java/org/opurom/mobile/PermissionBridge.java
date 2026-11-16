@@ -12,17 +12,23 @@ import android.os.Build;
  * {@link IllegalArgumentException}, a denied grant is a value ({@code false}),
  * never an exception, and a foreign or stale result is dropped, not crashed.
  *
- * <p>Declared in the manifest: {@link #RECORD_AUDIO} (install-time) and
- * {@link #POST_NOTIFICATIONS} (runtime on API 33+; granted implicitly below).
+ * <p>Declared in the manifest: {@link #RECORD_AUDIO}, {@link #CAMERA}, the two
+ * location grants and {@link #POST_NOTIFICATIONS} (runtime on API 33+; granted
+ * implicitly below). Camera and location ask for one permission at a time.
  */
 public final class PermissionBridge {
     public static final String RECORD_AUDIO = "android.permission.RECORD_AUDIO";
     public static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";
+    public static final String CAMERA = "android.permission.CAMERA";
+    public static final String ACCESS_FINE_LOCATION = "android.permission.ACCESS_FINE_LOCATION";
+    public static final String ACCESS_COARSE_LOCATION = "android.permission.ACCESS_COARSE_LOCATION";
 
     /** Stable request code for every permission ask this bridge owns. */
     public static final int REQUEST_CODE = 7710;
 
-    private static final String[] SUPPORTED = {RECORD_AUDIO, POST_NOTIFICATIONS};
+    private static final String[] SUPPORTED = {
+        RECORD_AUDIO, POST_NOTIFICATIONS, CAMERA, ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION
+    };
 
     /** Delivered on the UI thread with the final verdict for one permission. */
     public interface Callback {

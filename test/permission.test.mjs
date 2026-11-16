@@ -62,10 +62,12 @@ public final class PermissionCheck {
         // supported set
         check(PermissionBridge.isSupported(PermissionBridge.RECORD_AUDIO), "record supported");
         check(PermissionBridge.isSupported(PermissionBridge.POST_NOTIFICATIONS), "notifications supported");
-        check(!PermissionBridge.isSupported("android.permission.CAMERA"), "camera not declared here");
-        check(!PermissionBridge.isSupported(""), "empty is unsupported");
+        check(PermissionBridge.isSupported(PermissionBridge.CAMERA), "camera supported");
+        check(PermissionBridge.isSupported(PermissionBridge.ACCESS_FINE_LOCATION), "fine location supported");
+        check(PermissionBridge.isSupported(PermissionBridge.ACCESS_COARSE_LOCATION), "coarse location supported");
+        check(!PermissionBridge.isSupported("android.permission.SEND_SMS"), "undeclared is unsupported");
         try {
-            PermissionBridge.require("android.permission.CAMERA");
+            PermissionBridge.require("android.permission.SEND_SMS");
             check(false, "require must reject an undeclared permission");
         } catch (IllegalArgumentException expected) {
             check(expected.getMessage().contains("unsupported permission"), "message: " + expected.getMessage());

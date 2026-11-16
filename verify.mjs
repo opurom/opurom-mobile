@@ -564,6 +564,10 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrRouteAt',
+      'Java_org_opurom_mobile_OpuromNative_opuNotifyPost',
+      'Java_org_opurom_mobile_OpuromNative_opuNotifyCancel',
+      'Java_org_opurom_mobile_OpuromNative_opuCameraCapture',
+      'Java_org_opurom_mobile_OpuromNative_opuLocationGet',
     ];
     const abiSymbols = [
       'opu_state_new', 'opu_dispatch', 'opu_frame', 'opu_state_free',
@@ -610,9 +614,10 @@ if (!javac) {
   skip('javac not found (set JAVA_HOME or Opurom_JAVAC): JNI and app compile checks not run.');
 } else {
   const versionRun = run('javac -version', [javac, '-version'], { timeoutMs: 30000 });
-  const javacRun = run('javac', [
-    javac, '-d', path.join(WORK, 'classes'), path.join(ROOT, 'jni', 'OpuromNative.java'),
-  ], { timeoutMs: 60000 });
+  const jniJavacArgs = ['-d', path.join(WORK, 'classes')];
+  if (platform) jniJavacArgs.push('-cp', platform.jar);
+  jniJavacArgs.push(path.join(ROOT, 'jni', 'OpuromNative.java'));
+  const javacRun = run('javac', [javac, ...jniJavacArgs], { timeoutMs: 60000 });
   if (javacRun.ok) {
     const classFile = path.join(WORK, 'classes', 'org', 'opurom', 'mobile',
       'OpuromNative.class');

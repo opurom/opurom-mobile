@@ -17,6 +17,9 @@
 
 #include <jni.h>
 
+/* Capability wire status; matches CapabilityStatus.java. */
+#define OPU_CAP_INTERNAL 4
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,6 +82,20 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute(
 
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrRouteAt(
     JNIEnv *env, jclass clazz, jbyteArray ir, jint index, jbyteArray out);
+
+/* Capability calls delegate to the Java bridge and return a CapabilityStatus code. */
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuNotifyPost(
+    JNIEnv *env, jclass clazz, jobject context, jint id, jstring channel, jstring title,
+    jstring body);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuNotifyCancel(
+    JNIEnv *env, jclass clazz, jobject context, jint id);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuCameraCapture(
+    JNIEnv *env, jclass clazz, jobject context);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGet(
+    JNIEnv *env, jclass clazz, jobject context, jdoubleArray out);
 
 #ifdef __cplusplus
 }

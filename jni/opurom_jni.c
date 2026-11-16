@@ -14,6 +14,8 @@
 
 #include "opurom_jni.h"
 
+#include <stdarg.h>
+
 #include "opurom.h"
 #include "platform_view.h"
 
@@ -352,4 +354,68 @@ JNIEXPORT void JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFree(JNIEn
     (void)env;
     (void)clazz;
     opu_renderer_free((OpuRenderer *)(intptr_t)renderer);
+}
+
+/*
+ * Capability calls are thin JNI delegates: the Java bridge owns the permission,
+ * hardware and error decisions, so a typed status never becomes a pending Java
+ * exception across the C boundary. Lookup failure is the only native error.
+ */
+static jint capability_call(JNIEnv *env, const char *class_name, const char *method,
+                            const char *signature, ...) {
+    jclass target = (*env)->FindClass(env, class_name);
+    jmethodID entry;
+    va_list args;
+    jint status;
+
+    if (target == NULL) {
+        (*env)->ExceptionClear(env);
+        return (jint)OPU_CAP_INTERNAL;
+    }
+    entry = (*env)->GetStaticMethodID(env, target, method, signature);
+    if (entry == NULL) {
+        (*env)->ExceptionClear(env);
+        (*env)->DeleteLocalRef(env, target);
+        return (jint)OPU_CAP_INTERNAL;
+    }
+    va_start(args, signature);
+    status = (*env)->CallStaticIntMethodV(env, target, entry, args);
+    va_end(args);
+    (*env)->DeleteLocalRef(env, target);
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        return (jint)OPU_CAP_INTERNAL;
+    }
+    return status;
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuNotifyPost(
+    JNIEnv *env, jclass clazz, jobject context, jint id, jstring channel, jstring title,
+    jstring body) {
+    (void)clazz;
+    return capability_call(env, "org/opurom/mobile/NotificationBridge", "callPost",
+                           "(Landroid/content/Context;ILjava/lang/String;Ljava/lang/String;"
+                           "Ljava/lang/String;)I",
+                           context, id, channel, title, body);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuNotifyCancel(
+    JNIEnv *env, jclass clazz, jobject context, jint id) {
+    (void)clazz;
+    return capability_call(env, "org/opurom/mobile/NotificationBridge", "callCancel",
+                           "(Landroid/content/Context;I)I", context, id);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuCameraCapture(
+    JNIEnv *env, jclass clazz, jobject context) {
+    (void)clazz;
+    return capability_call(env, "org/opurom/mobile/CameraBridge", "capture",
+                           "(Landroid/content/Context;)I", context);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGet(
+    JNIEnv *env, jclass clazz, jobject context, jdoubleArray out) {
+    (void)clazz;
+    return capability_call(env, "org/opurom/mobile/LocationBridge", "get",
+                           "(Landroid/content/Context;[D)I", context, out);
 }

@@ -111,6 +111,26 @@ public final class NotificationBridge {
         manager(context).cancelAll();
     }
 
+    /** Typed JNI entry for post: bridge exceptions map to wire status codes. */
+    public static int callPost(Context context, int id, String channel, String title, String body) {
+        try {
+            post(context, id, channel, title, body);
+            return CapabilityStatus.OK;
+        } catch (RuntimeException error) {
+            return CapabilityStatus.from(error);
+        }
+    }
+
+    /** Typed JNI entry for cancel; an absent id is still a successful no-op. */
+    public static int callCancel(Context context, int id) {
+        try {
+            cancel(context, id);
+            return CapabilityStatus.OK;
+        } catch (RuntimeException error) {
+            return CapabilityStatus.from(error);
+        }
+    }
+
     private static NotificationManager manager(Context context) {
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
