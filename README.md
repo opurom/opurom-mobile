@@ -428,7 +428,9 @@ exported from each `.so`.
   keeps one persistent renderer per viewport, so a state change recomputes only the renderer's
   dirty region and leaves the rest of the previous frame. The hybrid caption sits below the
   self-drawn frame in deep ink on the surface, so native typography stays readable over any
-  rendered background without overlapping the frame's own text.
+  rendered background without overlapping the frame's own text. A declared `maxLines` cap on a
+  system-font span truncates its last visible line with the platform U+2026 glyph; the raster
+  layer keeps ASCII dots, so truncated edges are not pixel-identical across the two layers.
 - `android/app/src/main/assets/todo.opuir.json` is the exact output of
   `opuromc compile ../opurom-examples/todo.opu`; `verify.mjs` recompiles the source and compares
   byte-for-byte, then proves the asset is packaged by the offline `aapt2 link` step.

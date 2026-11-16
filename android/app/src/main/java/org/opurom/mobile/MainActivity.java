@@ -7,6 +7,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.text.TextPaint;
+import android.text.TextUtils;
+import android.text.TextUtils.TruncateAt;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -138,7 +141,7 @@ public final class MainActivity extends Activity {
      */
     static final class TextLayerView extends View {
         private final MainActivity host;
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         private JSONArray spans = new JSONArray();
 
         TextLayerView(MainActivity host) {
@@ -218,9 +221,26 @@ public final class MainActivity extends Activity {
                             + textSize;
                 }
                 float lineHeight = textSize + 2f * scaleY;
+                // Only a declared maxLines changes drawing. A missing key keeps
+                // the exact legacy split/draw path; a zero cap draws nothing.
+                int maxLines = span.has("maxLines") ? span.optInt("maxLines", 0) : -1;
+                if (maxLines == 0) {
+                    continue;
+                }
+                float availableWidth = hasOrigin ? right - anchorX
+                        : right - left - 4f * scaleX; // two pad() margins
                 canvas.save();
                 canvas.clipRect(left, top, right, bottom);
                 String[] lines = text.split("\\n", -1);
+                if (maxLines > 0) {
+                    int visible = Math.min(maxLines, lines.length);
+                    String[] capped = Arrays.copyOf(lines, visible);
+                    // shortcut: last visible line only; the platform glyph is
+                    // U+2026, intentionally not the raster layer's ASCII dots.
+                    capped[visible - 1] = TextUtils.ellipsize(capped[visible - 1],
+                            paint, Math.max(1f, availableWidth), TruncateAt.END).toString();
+                    lines = capped;
+                }
                 for (int line = 0; line < lines.length; line += 1) {
                     if (!lines[line].isEmpty()) {
                         canvas.drawText(lines[line], anchorX,
