@@ -16,6 +16,7 @@
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
+        android:debuggable="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
@@ -26,5 +27,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Dev hot reload: the CLI pushes a new IR into the app files dir and
+             broadcasts RELOAD_ACTION; the live activity swaps the frame program
+             over its retained state. Exported so `adb shell am broadcast` (uid
+             2000) reaches it; this is a debug-only reload hook. -->
+        <receiver
+            android:name=".MainActivity$ReloadReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="org.opurom.mobile.RELOAD" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

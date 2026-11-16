@@ -144,17 +144,23 @@ public final class MainActivity extends Activity {
     // self-drawn frame is unaffected; it stays under the JNI boundary.
     private String captionFace = "sans-serif";
 
+    // Hot reload: the CLI pushes a plaintext IR file into the app's files dir and
+    // broadcasts RELOAD_ACTION; the live activity re-reads it and re-renders over
+    // the retained state. A full reload (schema/shell change) reinstalls the APK.
+    public static final String RELOAD_ACTION = "org.opurom.mobile.RELOAD";
+    public static final String RELOAD_FILE = "opurom-reload.opuir.json";
+    private static MainActivity live;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        live = this;
         dark = (getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         resolvePalette();
 
         System.loadLibrary("opurom_mobile");
-        graphicsIr = resolveFontMetrics(resolveSystemMode(readAsset(selectedIrAsset()), dark));
-        initialRoute = OpuromNative.initialRoute(graphicsIr);
-        applyThemeTokens(new String(graphicsIr, StandardCharsets.UTF_8));
+        applyIr(resolveFontMetrics(resolveSystemMode(readAsset(selectedIrAsset()), dark)));
 
         getWindow().setStatusBarColor(brandBottom);
         getWindow().setNavigationBarColor(background);
@@ -1043,6 +1049,34 @@ public final class MainActivity extends Activity {
                 .getBytes(StandardCharsets.UTF_8);
     }
 
+    // Adopt the given IR bytes as the current frame program. Called once from
+    // onCreate and again on a hot reload: only graphicsIr and the derived route
+    // and theme tokens change, so the app state (remaining, routeStack, task
+    // flags) survives. The native renderer is kept; the frame re-renders over it.
+    private void applyIr(byte[] ir) {
+        graphicsIr = ir;
+        initialRoute = OpuromNative.initialRoute(graphicsIr);
+        applyThemeTokens(new String(graphicsIr, StandardCharsets.UTF_8));
+    }
+
+    // Re-read the pushed IR file over the current process and re-render. Runs on
+    // the UI thread (posted from the receiver). Returns false when no live
+    // activity or no pushed file is present, so the CLI can report "no reload".
+    static boolean reloadFromFile(java.io.File file) {
+        MainActivity activity = live;
+        if (activity == null || file == null || !file.isFile()) {
+            return false;
+        }
+        try {
+            byte[] ir = java.nio.file.Files.readAllBytes(file.toPath());
+            activity.applyIr(resolveFontMetrics(resolveSystemMode(ir, activity.dark)));
+            activity.renderFrame();
+            return true;
+        } catch (java.io.IOException error) {
+            return false;
+        }
+    }
+
     private byte[] readAsset(String name) {
         try (InputStream input = getAssets().open(name)) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -1083,11 +1117,32 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (live == this) {
+            live = null;
+        }
         if (renderer != 0) {
             OpuromNative.opuRendererFree(renderer);
             renderer = 0;
         }
         super.onDestroy();
+    }
+
+    // Receives RELOAD_ACTION from the dev CLI after a new IR is pushed into the
+    // app files dir. Posts the swap to the UI thread so renderFrame runs where
+    // the current viewport is valid; the process stays warm and state is kept.
+    public static final class ReloadReceiver extends android.content.BroadcastReceiver {
+        @Override
+        public void onReceive(android.content.Context context, android.content.Intent intent) {
+            if (!RELOAD_ACTION.equals(intent.getAction())) {
+                return;
+            }
+            MainActivity activity = live;
+            if (activity == null) {
+                return;
+            }
+            java.io.File file = new java.io.File(context.getFilesDir(), RELOAD_FILE);
+            activity.runOnUiThread(() -> reloadFromFile(file));
+        }
     }
 
     private static byte[] digestKey(String secret) {

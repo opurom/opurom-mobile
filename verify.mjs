@@ -761,12 +761,22 @@ if (!d8Jar || !existsSync(d8Jar)) {
 } else {
   const d8Work = path.join(WORK, 'd8');
   mkdirSync(d8Work, { recursive: true });
+  // Dex every compiled app class: nested classes (e.g. MainActivity$ReloadReceiver)
+  // are nest mates and d8 refuses a class whose mates are not on the input list.
+  const appClassFiles = [];
+  const collectClasses = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) collectClasses(full);
+      else if (entry.name.endsWith('.class')) appClassFiles.push(full);
+    }
+  };
+  collectClasses(appClassesDir);
   const d8Run = run('d8', [
     java, '-cp', d8Jar, 'com.android.tools.r8.D8',
     ...(platform ? ['--lib', platform.jar] : []),
     '--output', d8Work,
-    path.join(appClassesDir, 'org', 'opurom', 'mobile', 'OpuromNative.class'),
-    path.join(appClassesDir, 'org', 'opurom', 'mobile', 'MainActivity.class'),
+    ...appClassFiles.sort(),
   ], { timeoutMs: 120000 });
   const dex = path.join(d8Work, 'classes.dex');
   if (d8Run.ok && existsSync(dex)) {
