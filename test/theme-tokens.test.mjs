@@ -150,16 +150,20 @@ test('an IR with no semantic token resolves every role to 0 (keep mode palette)'
     primary: 0, secondary: 0, success: 0, warning: 0, error: 0, info: 0,
     accent: 0xFF097FEB,
   });
-  // The packaged IRs declare only tokens.stage, so no semantic role is authored
-  // and the Activity keeps its measured (mode-aware) palette.
+  // Packaged IRs may author semantic tokens; an absent role stays 0 so the
+  // Activity keeps its measured (mode-aware) palette for that role.
   for (const name of readdirSync(ASSETS).filter((n) => n.endsWith('.opuir.json'))) {
     const text = readFileSync(path.join(ASSETS, name), 'utf8');
     const theme = JSON.parse(text).theme;
     const model = resolve(text);
     assert.doesNotThrow(() => JSON.parse(text), `${name} stays valid JSON`);
     for (const role of ['primary', 'secondary', 'success', 'warning', 'error', 'info']) {
-      assert.equal(model[role], 0,
-        `${name} authors no ${role} token, so the mode palette is kept`);
+      const authored = theme.tokens?.[role];
+      const expected = authored
+        ? (0xFF000000 | Number.parseInt(authored.slice(1), 16)) >>> 0
+        : 0;
+      assert.equal(model[role], expected,
+        `${name} ${role} comes from its authored token or the mode palette`);
     }
     if (theme.accent) {
       assert.equal(model.accent, (0xFF000000 | Number.parseInt(theme.accent.slice(1), 16)) >>> 0,

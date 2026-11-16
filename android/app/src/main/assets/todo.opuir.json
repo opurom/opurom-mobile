@@ -59,12 +59,14 @@
     }
   ],
   "theme": {
-    "accent": "#007AFF",
+    "accent": "#006EFF",
     "fontScale": 1.0,
     "mode": "light",
     "radius": 12,
     "tokens": {
       "onSurface": "#111827",
+      "primary": "#006EFF",
+      "secondary": "#2DD8FF",
       "stage": "#F9FAFB",
       "surface": "#FFFFFF"
     }
