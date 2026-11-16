@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -139,6 +140,8 @@ public final class MainActivity extends Activity {
     static final class TextLayerView extends View {
         private final MainActivity host;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        // Cached so per-span weight switching never allocates; DEFAULT is reset each span.
+        private final Typeface boldTypeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
         private JSONArray spans = new JSONArray();
 
         TextLayerView(MainActivity host) {
@@ -187,8 +190,19 @@ public final class MainActivity extends Activity {
                     paint.setColor(Color.argb(color.optInt(3, 255), color.optInt(0, 0),
                             color.optInt(1, 0), color.optInt(2, 0)));
                 }
-                float textSize = 7f * Math.max(1, span.optInt("size", 1)) * scaleY;
+                // fontPx is an exact logical size; absent falls back to the raster 7*size.
+                int fontPx = span.optInt("fontPx", 0);
+                float logicalSize = fontPx > 0 ? fontPx : 7f * Math.max(1, span.optInt("size", 1));
+                float textSize = logicalSize * scaleY;
                 paint.setTextSize(textSize);
+                // Reset every span so a bold/spaced run cannot bleed into the next.
+                paint.setTypeface("bold".equals(span.optString("weight", ""))
+                        ? boldTypeface : Typeface.DEFAULT);
+                // letterSpacing is logical px; Paint.setLetterSpacing takes ems.
+                // shortcut: below API 28 letter spacing is skipped, default kept.
+                if (Build.VERSION.SDK_INT >= 28) {
+                    paint.setLetterSpacing(span.optInt("letterSpacing", 0) / logicalSize);
+                }
                 String align = span.optString("align", "start");
                 JSONArray origin = span.optJSONArray("origin");
                 boolean hasOrigin = origin != null && origin.length() == 2;

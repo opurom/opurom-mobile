@@ -28,7 +28,7 @@ test('the host draws only IR pixels and has no Java chrome', () => {
   }
   assert.ok(!/setBackgroundColor\(|setPadding\(|GradientDrawable/.test(ACTIVITY),
     'no Java-owned colours or padding');
-  assert.ok(!/Typeface\.create\(/.test(ACTIVITY), 'no authored font family');
+  assert.ok(!/createFromAsset|createFromFile/.test(ACTIVITY), 'no authored font file');
 });
 
 test('touch coordinates flow through hit test into tap dispatch', () => {
