@@ -649,10 +649,20 @@ if (!javac) {
 }
 
 // --- The Android app sources need a real android.jar to compile against ---
+// Compile every app Java source so a new primitive class is checked too.
+const appJavaDir = path.join(ROOT, 'android', 'app', 'src', 'main', 'java');
+function collectJavaSources(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...collectJavaSources(full));
+    else if (entry.name.endsWith('.java')) out.push(full);
+  }
+  return out;
+}
 const appSources = [
   path.join(ROOT, 'jni', 'OpuromNative.java'),
-  path.join(ROOT, 'android', 'app', 'src', 'main', 'java', 'org', 'opurom', 'mobile',
-    'MainActivity.java'),
+  ...collectJavaSources(appJavaDir).sort(),
 ];
 const appClassesDir = path.join(WORK, 'app-classes');
 if (!javac) {

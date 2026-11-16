@@ -223,9 +223,21 @@ process.env.JAVA_HOME = path.dirname(jdkBin);
 process.env.PATH = `${jdkBin}${path.delimiter}${process.env.PATH || ''}`;
 
 // ---------------------------------------------------------------------
+// Compile every app Java source, not a fixed list: a new primitive class added
+// under the mobile package (storage, crypto, helpers) must reach the dex.
+const appJavaDir = path.join(ROOT, 'android', 'app', 'src', 'main', 'java');
+function collectJava(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...collectJava(full));
+    else if (entry.name.endsWith('.java')) out.push(full);
+  }
+  return out;
+}
 const appSources = [
   path.join(ROOT, 'jni', 'OpuromNative.java'),
-  path.join(ROOT, 'android', 'app', 'src', 'main', 'java', 'org', 'opurom', 'mobile', 'MainActivity.java'),
+  ...collectJava(appJavaDir).sort(),
 ];
 let r = run('javac', [
   javac, '--release', '17', '-d', classesDir, '-cp', androidJar,
