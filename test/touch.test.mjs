@@ -40,6 +40,19 @@ test('touch coordinates flow through hit test into tap dispatch', () => {
   assert.match(ACTIVITY, /view\.invalidate\(\)/);
 });
 
+test('press phase is captured on DOWN and released on UP or CANCEL', () => {
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_DOWN/);
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_CANCEL/);
+  assert.match(ACTIVITY, /host\.onPressDown\(event\.getX\(\), event\.getY\(\)\)/);
+  assert.match(ACTIVITY, /host\.onPressUp\(false\)/);
+  assert.match(ACTIVITY, /host\.onPressUp\(true\)/);
+  assert.match(ACTIVITY, /ViewConfiguration\.getLongPressTimeout\(\)/);
+  assert.match(ACTIVITY, /TouchPhase\.toCanvas\(screenX, frameScaleX\)/);
+  assert.match(ACTIVITY, /private void reportPressPhase\(TouchPhase phase/);
+  const seams = ACTIVITY.match(/private void reportPressPhase\(/g) || [];
+  assert.equal(seams.length, 1, 'the renderer press seam is a single function');
+});
+
 test('the hit and tap ABI resolves through Java, C and Rust', () => {
   for (const name of ['opuHitTest', 'opuTapNode']) {
     const symbol = `Java_org_opurom_mobile_OpuromNative_${name}`;

@@ -9,10 +9,14 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -55,6 +59,7 @@ public final class MainActivity extends Activity {
     // A0 frame pump: caller-owned fixed-step clock, no wall clock, no new opt-in flag.
     private static final int FRAME_STEP_MS = 16;
     private static final int ANIM_SETTLED_MS = 4000;
+    private static final String PRESS_TAG = "OpuromPress";
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
@@ -84,6 +89,24 @@ public final class MainActivity extends Activity {
     private int elapsedMs;
     private boolean pumpQueued;
     private final FramePump framePump = new FramePump(this);
+    // Caller-owned press phase; never written into stateJson or the IR.
+    private final TouchPhase press = new TouchPhase();
+    private final Handler pressHandler = new Handler(Looper.getMainLooper());
+    private final LongPressCheck longPressCheck = new LongPressCheck(this);
+
+    /** Marks longPressed after the platform timeout while the same node is held. */
+    static final class LongPressCheck implements Runnable {
+        private final MainActivity host;
+
+        LongPressCheck(MainActivity host) {
+            this.host = host;
+        }
+
+        @Override
+        public void run() {
+            host.onLongPressTimeout();
+        }
+    }
 
     /** Fixed-step animation clock; a named class keeps d8 dexing simple. */
     static final class FramePump implements Choreographer.FrameCallback {
@@ -159,11 +182,21 @@ public final class MainActivity extends Activity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            if (event.getAction() == MotionEvent.ACTION_UP) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                host.onPressDown(event.getX(), event.getY());
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP) {
+                host.onPressUp(false);
                 host.onTap(event.getX(), event.getY());
                 return true;
             }
-            return event.getAction() == MotionEvent.ACTION_DOWN;
+            if (action == MotionEvent.ACTION_CANCEL) {
+                host.onPressUp(true);
+                return true;
+            }
+            return false;
         }
     }
 
@@ -279,6 +312,56 @@ public final class MainActivity extends Activity {
                 canvas.restore();
             }
         }
+    }
+
+    /** ACTION_DOWN: hit-test the touch point and open the caller-owned press phase. */
+    private void onPressDown(float screenX, float screenY) {
+        if (lastFrame == null || rendererWidth <= 0 || view.getWidth() <= 0
+                || view.getHeight() <= 0) {
+            return;
+        }
+        int x = TouchPhase.toCanvas(screenX, frameScaleX);
+        int y = TouchPhase.toCanvas(screenY, frameScaleY);
+        int node = OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
+                rendererWidth, rendererHeight);
+        press.down(node, x, y, SystemClock.uptimeMillis());
+        Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
+        if (node != TouchPhase.NO_NODE) {
+            pressHandler.removeCallbacks(longPressCheck);
+            pressHandler.postDelayed(longPressCheck,
+                    ViewConfiguration.getLongPressTimeout());
+            reportPressPhase(press, true, false);
+        }
+    }
+
+    /** ACTION_UP/ACTION_CANCEL: close the press before the tap path runs. */
+    private void onPressUp(boolean cancelled) {
+        pressHandler.removeCallbacks(longPressCheck);
+        if (press.isPressed()) {
+            reportPressPhase(press, false, press.longPressed);
+        }
+        press.clear();
+        Log.d(PRESS_TAG, "up cancelled=" + cancelled);
+    }
+
+    private void onLongPressTimeout() {
+        if (press.isPressed()
+                && press.markLongPressed(SystemClock.uptimeMillis(),
+                        ViewConfiguration.getLongPressTimeout())) {
+            Log.d(PRESS_TAG, "long node=" + press.node);
+            reportPressPhase(press, true, true);
+        }
+    }
+
+    /**
+     * Single seam that feeds the press phase to the renderer once its ripple
+     * ABI is fixed. Touch coords are the future ripple centre.
+     * shortcut: render-side press ABI is pending; this logs only, no state or
+     * ABI change, and the real call will replace this one body when it lands.
+     */
+    private void reportPressPhase(TouchPhase phase, boolean on, boolean longPressed) {
+        Log.d(PRESS_TAG, "phase node=" + phase.node + " on=" + on
+                + " long=" + longPressed + " x=" + phase.x + " y=" + phase.y);
     }
 
     /** Maps a screen coordinate into the render viewport, then dispatches a tap. */
