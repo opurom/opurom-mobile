@@ -113,7 +113,8 @@ public final class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         live = this;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // Status bar stays visible, matching the golden captures. Content is
+        // laid out below it; the three layers share view-relative coordinates.
         dark = (getResources().getConfiguration().uiMode
                 & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
                 == android.content.res.Configuration.UI_MODE_NIGHT_YES;

@@ -22,7 +22,7 @@ test('the host draws only IR pixels and has no Java chrome', () => {
   assert.match(ACTIVITY, /static final class IrView extends View/);
   assert.match(ACTIVITY, /protected void onDraw\(Canvas canvas\)/);
   assert.match(ACTIVITY, /canvas\.drawBitmap\(frame, null,/);
-  assert.match(ACTIVITY, /FLAG_FULLSCREEN/);
+  assert.ok(!ACTIVITY.includes('FLAG_FULLSCREEN'), 'status bar stays visible');
   for (const widget of ['TextView', 'ImageView', 'LinearLayout', 'ScrollView', 'Button']) {
     assert.ok(!ACTIVITY.includes(widget), `${widget} must not appear in the host`);
   }
