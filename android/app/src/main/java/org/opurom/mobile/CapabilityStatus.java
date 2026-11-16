@@ -12,6 +12,26 @@ public final class CapabilityStatus {
     private CapabilityStatus() {
     }
 
+    /** Wire symbols shared with the PlatformCall result vocabulary. */
+    public static String wireName(int code) {
+        switch (code) {
+            case OK:
+                return "OK";
+            case UNSUPPORTED:
+                return "UNSUPPORTED";
+            case PERMISSION_DENIED:
+                return "PERMISSION_DENIED";
+            case NO_HARDWARE:
+                return "NO_HARDWARE";
+            case INTERNAL:
+                return "INTERNAL";
+            case INVALID:
+                return "INVALID";
+            default:
+                return "INTERNAL";
+        }
+    }
+
     /** Maps the existing bridge exception vocabulary onto the wire codes. */
     static int from(RuntimeException error) {
         if (error instanceof IllegalArgumentException) {

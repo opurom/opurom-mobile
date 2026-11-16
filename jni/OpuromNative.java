@@ -68,6 +68,17 @@ public final class OpuromNative {
 
     public static native int opuLocationGet(Context context, double[] out);
 
+    /** Writes the IR result string {@code "<lat>,<lon>"} into {@code out}. */
+    public static native int opuLocationGetText(Context context, byte[] out);
+
+    /** Top-most IR node under a point in the render viewport; zero for a miss. */
+    public static native int opuHitTest(byte[] irJson, byte[] stateJson,
+                                        int x, int y, int width, int height);
+
+    /** Dispatches a tap on one node and writes the new state JSON into {@code outJson}. */
+    public static native int opuTapNode(byte[] irJson, byte[] stateJson,
+                                        int nodeId, byte[] outJson);
+
     private OpuromNative() {
     }
 

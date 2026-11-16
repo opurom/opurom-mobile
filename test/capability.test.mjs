@@ -15,6 +15,7 @@ const SRC = path.join(ROOT, 'android', 'app', 'src', 'main', 'java', 'org', 'opu
 const MANIFEST = path.join(ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const SYMBOLS = [
   'opuNotifyPost', 'opuNotifyCancel', 'opuCameraCapture', 'opuLocationGet',
+  'opuLocationGetText',
 ];
 
 function findJavac() {
@@ -74,6 +75,14 @@ public final class CapabilityCheck {
         check(NotificationBridge.callPost(null, 1, "  ", "t", "b") == CapabilityStatus.INVALID, "blank channel");
         check(NotificationBridge.callCancel(null, 1) == CapabilityStatus.INTERNAL, "no context contained");
 
+        String[] wire = {"OK", "INVALID", "UNSUPPORTED", "PERMISSION_DENIED", "NO_HARDWARE", "INTERNAL"};
+        int[] codes = {0, 5, 1, 2, 3, 4};
+        for (int i = 0; i < codes.length; i++) {
+            check(wire[i].equals(CapabilityStatus.wireName(codes[i])), "wire map " + wire[i]);
+        }
+        check(LocationBridge.format(new double[] {22.5431, 114.0579}).equals("22.5431,114.0579"),
+                "location result string");
+
         System.out.println("CAPABILITY_CHECKS_OK");
     }
 }
@@ -100,6 +109,22 @@ test('capability bridges pass typed-degradation checks on a JVM', () => {
     ['-cp', `${classes}${path.delimiter}${androidJar}`, 'org.opurom.mobile.CapabilityCheck'],
     { encoding: 'utf8', timeout: 30000 });
   assert.match(out, /CAPABILITY_CHECKS_OK/);
+});
+
+test('the PlatformCall wire contract maps positionally onto the JNI surface', () => {
+  const header = readFileSync(path.join(ROOT, 'jni', 'opurom_jni.h'), 'utf8');
+  const notification = readFileSync(path.join(SRC, 'NotificationBridge.java'), 'utf8');
+  const camera = readFileSync(path.join(SRC, 'CameraBridge.java'), 'utf8');
+  const location = readFileSync(path.join(SRC, 'LocationBridge.java'), 'utf8');
+  // IR request fields are id, channel, title, body; the JNI int must be
+  // followed by the strings in exactly that order.
+  assert.match(header, /opuNotifyPost\([\s\S]*?jobject context, jint id, jstring channel, jstring title,\s*jstring body\)/);
+  assert.match(notification, /post\(context, id, channel, title, body\)/);
+  // Shortcuts allowed by the contract are documented at the call site.
+  assert.match(notification, /shortcut:[\s\S]*?cancel/);
+  assert.match(camera, /shortcut:[\s\S]*?facing and flash/);
+  assert.match(location, /shortcut:[\s\S]*?accuracy and timeout/);
+  assert.match(location, /Double\.toString\(coordinates\[0\]\) \+ ","/);
 });
 
 test('the native call surface and manifest match the capability contract', () => {

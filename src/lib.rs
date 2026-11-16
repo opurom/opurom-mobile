@@ -16,7 +16,10 @@
 //! Panics inside Rust code are caught and returned as `OPU_ERR_PANIC`; an abort or an invalid
 //! pointer remains undefined behavior. This ABI is not thread-safe for one state: serialize calls.
 
-use opurom_render::{parse_ir, parse_state_json, Ir, Renderer, StateView, SETTLED_MS};
+use opurom_core::{Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime,
+                  Value as CoreValue};
+use opurom_render::{hit, layout, parse_ir, parse_state_json, Ir, Renderer, StateView, SETTLED_MS};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -185,6 +188,18 @@ fn json_str<'a>(ptr: *const u8, len: usize, code: i32) -> Result<&'a str, i32> {
     std::str::from_utf8(bytes).map_err(|_| code)
 }
 
+fn parse_ir_state(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+) -> Result<(Ir, StateView), i32> {
+    let ir = parse_ir(json_str(ir_json, ir_len, OPU_ERR_IR)?).map_err(|_| OPU_ERR_IR)?;
+    let state = parse_state_json(&ir, json_str(state_json, state_len, OPU_ERR_STATE)?)
+        .map_err(|_| OPU_ERR_STATE)?;
+    Ok((ir, state))
+}
+
 fn frame_inputs(
     ir_json: *const u8,
     ir_len: usize,
@@ -194,13 +209,11 @@ fn frame_inputs(
     width: u32,
     height: u32,
 ) -> Result<(Ir, StateView, usize), i32> {
-    if ir_json.is_null() || state_json.is_null() || out.is_null() {
+    if out.is_null() {
         return Err(OPU_ERR_NULL);
     }
     let byte_len = frame_len(width, height).ok_or(OPU_ERR_DIMENSION)?;
-    let ir = parse_ir(json_str(ir_json, ir_len, OPU_ERR_IR)?).map_err(|_| OPU_ERR_IR)?;
-    let state = parse_state_json(&ir, json_str(state_json, state_len, OPU_ERR_STATE)?)
-        .map_err(|_| OPU_ERR_STATE)?;
+    let (ir, state) = parse_ir_state(ir_json, ir_len, state_json, state_len)?;
     Ok((ir, state, byte_len))
 }
 
@@ -514,6 +527,128 @@ pub extern "C" fn opu_renderer_redraw_stats(
     )
 }
 
+/// Top-most laid-out node containing the viewport point, or 0 for a miss.
+/// The viewport must match the one passed to the render call, so the host can
+/// forward a screen coordinate without a second layout.
+#[no_mangle]
+pub extern "C" fn opu_hit_test(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> u32 {
+    ffi_guard(
+        || {
+            if x < 0 || y < 0 || frame_len(width, height).is_none() {
+                return 0;
+            }
+            let (ir, state) = match parse_ir_state(ir_json, ir_len, state_json, state_len) {
+                Ok(inputs) => inputs,
+                Err(_) => return 0,
+            };
+            let laid = layout(&ir, &state, width, height);
+            for node in laid.iter().rev() {
+                if hit(&node.rect, x as i64, y as i64) {
+                    return node.id;
+                }
+            }
+            0
+        },
+        0,
+    )
+}
+
+fn core_value(value: &JsonValue) -> Result<CoreValue, i32> {
+    match value {
+        JsonValue::String(text) => Ok(CoreValue::Str(text.clone())),
+        JsonValue::Bool(flag) => Ok(CoreValue::Bool(*flag)),
+        JsonValue::Number(number) => number
+            .as_i64()
+            .map(CoreValue::Int)
+            .ok_or(OPU_ERR_STATE),
+        JsonValue::Array(items) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_owned).ok_or(OPU_ERR_STATE))
+            .collect::<Result<Vec<String>, i32>>()
+            .map(CoreValue::List),
+        _ => Err(OPU_ERR_STATE),
+    }
+}
+
+fn tap_node_impl(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    node_id: u32,
+    out_json: *mut u8,
+    out_capacity: usize,
+) -> Result<i32, i32> {
+    if out_json.is_null() {
+        return Err(OPU_ERR_NULL);
+    }
+    let ir_text = json_str(ir_json, ir_len, OPU_ERR_IR)?;
+    let state_text = json_str(state_json, state_len, OPU_ERR_STATE)?;
+    let overrides: JsonValue = serde_json::from_str(state_text).map_err(|_| OPU_ERR_STATE)?;
+    let mut runtime = CoreRuntime::from_ir_json(ir_text).map_err(|_| OPU_ERR_IR)?;
+    let object = overrides.as_object().ok_or(OPU_ERR_STATE)?;
+    for (name, value) in object {
+        // Host state may outlive an IR that no longer declares a key.
+        if runtime.state(name).is_none() {
+            continue;
+        }
+        let patch = CorePatch {
+            name: name.clone(),
+            value: core_value(value)?,
+        };
+        runtime.apply_patch(&patch).map_err(|_| OPU_ERR_STATE)?;
+    }
+    let _ = runtime
+        .dispatch(CoreEvent::Tap { node_id })
+        .map_err(|_| OPU_ERR_EVENT)?;
+    let mut state = JsonMap::new();
+    for patch in runtime.snapshot() {
+        let value = serde_json::to_value(patch.value).map_err(|_| OPU_ERR_STATE)?;
+        state.insert(patch.name, value);
+    }
+    let text =
+        serde_json::to_string(&JsonValue::Object(state)).map_err(|_| OPU_ERR_STATE)?;
+    let bytes = text.as_bytes();
+    if bytes.len() > out_capacity {
+        return Err(OPU_ERR_OVERFLOW);
+    }
+    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_json, bytes.len()) };
+    Ok(OPU_OK)
+}
+
+/// Dispatches `tap` on one node through the shared state machine and writes the
+/// complete resulting state as a JSON object into `out_json`. The host reuses
+/// that document for the next frame, so state survives successive taps. A node
+/// with no tap binding returns OPU_ERR_EVENT and leaves the output untouched.
+#[no_mangle]
+pub extern "C" fn opu_tap_node(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    node_id: u32,
+    out_json: *mut u8,
+    out_capacity: usize,
+) -> i32 {
+    ffi_guard(
+        || match tap_node_impl(ir_json, ir_len, state_json, state_len, node_id,
+                               out_json, out_capacity) {
+            Ok(status) => status,
+            Err(code) => code,
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,5 +761,58 @@ mod tests {
         let mut bytes = [0u8; 8];
         assert_eq!(opu_frame(state.ptr(), bytes.as_mut_ptr(), 1, 2), OPU_OK);
         assert_eq!(bytes, [0, 0, 0, 255, 103, 199, 184, 255]);
+    }
+
+    #[test]
+    fn hit_test_and_tap_node_drive_calculator_state() {
+        let ir = include_bytes!("../android/app/src/main/assets/calculator.opuir.json");
+        let empty = b"{}";
+        let (width, height) = (400u32, 720u32);
+        let mut unique = Vec::new();
+        for y in (0..height as i32).step_by(20) {
+            for x in (0..width as i32).step_by(20) {
+                let id = opu_hit_test(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                      x, y, width, height);
+                if id != 0 && !unique.contains(&id) {
+                    unique.push(id);
+                }
+            }
+        }
+        assert!(unique.len() >= 2, "expected at least two laid-out nodes");
+        let mut tappable = Vec::new();
+        let mut scratch = [0u8; 8192];
+        for id in unique {
+            let status = opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                      id, scratch.as_mut_ptr(), scratch.len());
+            if status == OPU_OK && !tappable.contains(&id) {
+                tappable.push(id);
+            }
+        }
+        assert!(tappable.len() >= 2, "expected at least two nodes with tap bindings");
+        let first = tappable[0];
+        let second = tappable[1];
+        let mut out1 = [0u8; 8192];
+        let mut out2 = [0u8; 8192];
+        assert_eq!(
+            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                         first, out1.as_mut_ptr(), out1.len()),
+            OPU_OK
+        );
+        assert_eq!(
+            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                         second, out2.as_mut_ptr(), out2.len()),
+            OPU_OK
+        );
+        let len1 = out1.iter().position(|b| *b == 0).unwrap_or(out1.len());
+        let len2 = out2.iter().position(|b| *b == 0).unwrap_or(out2.len());
+        let a = std::str::from_utf8(&out1[..len1]).unwrap();
+        let b = std::str::from_utf8(&out2[..len2]).unwrap();
+        let _: JsonValue = serde_json::from_str(a).unwrap();
+        assert_ne!(a, b, "different digit nodes must produce different state");
+        assert_eq!(
+            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                         u32::MAX, out1.as_mut_ptr(), out1.len()),
+            OPU_ERR_EVENT
+        );
     }
 }

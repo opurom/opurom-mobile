@@ -10,4 +10,6 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+opurom-core = { path = "../opurom-core" }
 opurom-render = { path = "../opurom-render" }
+serde_json = "=1.0.154"

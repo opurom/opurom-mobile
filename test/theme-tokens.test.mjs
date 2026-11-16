@@ -196,19 +196,7 @@ test('a token declared in a nested object is not mistaken for a theme token', ()
     'only the theme object\'s tokens are read');
 });
 
-test('the Activity wires the resolved palette onto native chrome', () => {
-  assert.match(ACTIVITY, /applyThemeTokens\(new String\(graphicsIr, StandardCharsets\.UTF_8\)\)/,
-    'onCreate resolves tokens from the loaded IR');
-  const apply = /private void applyThemeTokens\(String ir\) \{([\s\S]*?)\n    \}/.exec(ACTIVITY);
-  assert.ok(apply, 'applyThemeTokens owns the mapping');
-  const text = apply[1];
-  assert.match(text, /if \(theme\.success != 0\) positive = theme\.success;/,
-    'the positive/status ink uses the success token only when authored');
-  assert.match(text, /if \(theme\.accent != 0\) \{[\s\S]*?accent = theme\.accent;/,
-    'the authored accent drives the accent chrome, guarded against absence');
-});
-
-test('theme.fontMetrics selects proportional vs fixed native type', () => {
+test('theme.fontMetrics keeps a single source pattern', () => {
   const pattern = /FONT_METRICS\s*=\s*java\.util\.regex\.Pattern\.compile\("((?:\\.|[^"\\])*)"\)/
     .exec(ACTIVITY);
   assert.ok(pattern, 'a single FONT_METRICS pattern owns the token');
@@ -216,6 +204,4 @@ test('theme.fontMetrics selects proportional vs fixed native type', () => {
   assert.ok(re.test('"fontMetrics":"proportional"'));
   assert.ok(re.test('"fontMetrics":  "proportional"'));
   assert.ok(!re.test('"fontMetrics":"fixed"'), 'fixed is not proportional');
-  assert.match(ACTIVITY, /captionFace = themeFontMetrics\(ir\) \? "sans-serif" : "monospace";/,
-    'proportional chooses the sans-serif face, fixed the monospace one');
 });

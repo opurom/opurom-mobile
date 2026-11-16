@@ -25,6 +25,10 @@ public final class CameraBridge {
      * Captures one photo. A device without a camera returns {@code NO_HARDWARE}
      * and can still install and run the app; a missing grant returns
      * {@code PERMISSION_DENIED}. Neither path throws.
+     *
+     * <p>shortcut: the IR request's facing and flash fields are accepted by the
+     * call site but ignored here; the default camera and flash settings apply.
+     * Upgrade to a Camera2 session when image data is needed.
      */
     public static int capture(Context context) {
         if (context == null) {

@@ -129,6 +129,25 @@ size_t opu_ir_initial_route(const uint8_t *ir_json, size_t ir_len,
 size_t opu_ir_route_at(const uint8_t *ir_json, size_t ir_len, uint32_t index,
                        uint8_t *out, size_t out_capacity);
 
+/*
+ * Returns the top-most laid-out node containing (x, y) for the given viewport,
+ * or 0 for a miss, malformed input or an out-of-range point. The viewport must
+ * match the one used for the frame so one screen coordinate maps to one node.
+ */
+uint32_t opu_hit_test(const uint8_t *ir_json, size_t ir_len,
+                      const uint8_t *state_json, size_t state_len,
+                      int32_t x, int32_t y, uint32_t width, uint32_t height);
+
+/*
+ * Dispatches a tap on node_id through the state machine and writes the full
+ * resulting state as a JSON object into out_json (bounded by out_capacity).
+ * Returns OPU_OK on success, OPU_ERR_EVENT for a node without a binding, or
+ * OPU_ERR_OVERFLOW when the JSON does not fit.
+ */
+int32_t opu_tap_node(const uint8_t *ir_json, size_t ir_len,
+                     const uint8_t *state_json, size_t state_len,
+                     uint32_t node_id, uint8_t *out_json, size_t out_capacity);
+
 #ifdef __cplusplus
 }
 #endif

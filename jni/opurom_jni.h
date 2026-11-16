@@ -97,6 +97,16 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuCameraCapture(
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGet(
     JNIEnv *env, jclass clazz, jobject context, jdoubleArray out);
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGetText(
+    JNIEnv *env, jclass clazz, jobject context, jbyteArray out);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuHitTest(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint x, jint y, jint width,
+    jint height);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTapNode(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint node_id, jbyteArray out);
+
 #ifdef __cplusplus
 }
 #endif

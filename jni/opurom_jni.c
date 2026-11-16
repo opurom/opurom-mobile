@@ -419,3 +419,90 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGet(
     return capability_call(env, "org/opurom/mobile/LocationBridge", "get",
                            "(Landroid/content/Context;[D)I", context, out);
 }
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuLocationGetText(
+    JNIEnv *env, jclass clazz, jobject context, jbyteArray out) {
+    (void)clazz;
+    return capability_call(env, "org/opurom/mobile/LocationBridge", "getText",
+                           "(Landroid/content/Context;[B)I", context, out);
+}
+
+/* Pin the two JSON inputs for one hit/tap call; both are read-only. */
+static jint pin_ir_state(JNIEnv *env, jbyteArray ir, jbyteArray state, jbyte **ir_bytes,
+                         jbyte **state_bytes, jsize *ir_len, jsize *state_len) {
+    *ir_bytes = NULL;
+    *state_bytes = NULL;
+    if (ir == NULL || state == NULL) {
+        return (jint)OPU_ERR_NULL;
+    }
+    *ir_len = (*env)->GetArrayLength(env, ir);
+    *state_len = (*env)->GetArrayLength(env, state);
+    *ir_bytes = (*env)->GetByteArrayElements(env, ir, NULL);
+    if (*ir_bytes == NULL) {
+        return (jint)OPU_ERR_NULL;
+    }
+    *state_bytes = (*env)->GetByteArrayElements(env, state, NULL);
+    if (*state_bytes == NULL) {
+        (*env)->ReleaseByteArrayElements(env, ir, *ir_bytes, JNI_ABORT);
+        *ir_bytes = NULL;
+        return (jint)OPU_ERR_NULL;
+    }
+    return (jint)OPU_OK;
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuHitTest(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint x, jint y, jint width,
+    jint height) {
+    jbyte *ir_bytes;
+    jbyte *state_bytes;
+    jsize ir_len;
+    jsize state_len;
+    jint node;
+
+    (void)clazz;
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+    if (pin_ir_state(env, ir, state, &ir_bytes, &state_bytes, &ir_len, &state_len) != OPU_OK) {
+        return 0;
+    }
+    node = (jint)opu_hit_test((const uint8_t *)ir_bytes, (size_t)ir_len,
+                              (const uint8_t *)state_bytes, (size_t)state_len,
+                              x, y, (uint32_t)width, (uint32_t)height);
+    (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+    return node;
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTapNode(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint node_id, jbyteArray out) {
+    jbyte *ir_bytes;
+    jbyte *state_bytes;
+    jbyte *out_bytes;
+    jsize ir_len;
+    jsize state_len;
+    jint status;
+
+    (void)clazz;
+    if (out == NULL || node_id <= 0) {
+        return (jint)OPU_ERR_NULL;
+    }
+    status = pin_ir_state(env, ir, state, &ir_bytes, &state_bytes, &ir_len, &state_len);
+    if (status != OPU_OK) {
+        return status;
+    }
+    out_bytes = (*env)->GetByteArrayElements(env, out, NULL);
+    if (out_bytes == NULL) {
+        (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+        (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+        return (jint)OPU_ERR_NULL;
+    }
+    status = (jint)opu_tap_node((const uint8_t *)ir_bytes, (size_t)ir_len,
+                                (const uint8_t *)state_bytes, (size_t)state_len,
+                                (uint32_t)node_id, (uint8_t *)out_bytes,
+                                (size_t)(*env)->GetArrayLength(env, out));
+    (*env)->ReleaseByteArrayElements(env, out, out_bytes, status == OPU_OK ? 0 : JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+    return status;
+}

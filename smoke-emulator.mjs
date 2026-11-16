@@ -92,8 +92,10 @@ if (install.status !== 0 || !/Success/.test(install.stdout)) {
   pass(`installed ${path.basename(APK)} on ${device}`);
 }
 
-// 2. Launch.
-const start = run(adb, ['-s', device, 'shell', 'am', 'start', '-W', '-n', ACTIVITY]);
+// 2. Launch the calculator IR: its operator key is a deterministic tap target
+// for the IR hit-test path.
+const start = run(adb, ['-s', device, 'shell', 'am', 'start', '-n', ACTIVITY,
+  '--es', 'org.opurom.mobile.IR', 'calculator.opuir.json']);
 if (start.status !== 0) fail('am start failed', `${start.stdout}\n${start.stderr}`);
 
 // 3. Wait for the launch to settle (bounded poll for the process).
@@ -140,15 +142,15 @@ const shot = grab('screen.png');
 if (!shot) fail('screencap produced no usable PNG');
 else pass(`captured screenshot (${shot.bytes} bytes) -> target/emulator/${path.basename(shot.path)}`);
 
-// 6. Tap the counter button and prove the frame changed (state re-render). The
-// REFRESH button sits in the lower third on the fixture app; the tap is a
-// best-effort interaction check, skipped honestly when the screen is unknown.
+// 6. Tap the calculator's divide key: at roughly 9% width and 45% height it
+//    sets the operator state, which must repaint the IR frame. The app has no
+//    Java controls, so this exercises the real touch-to-hit-to-tap path.
 if (shot) {
   const size = run(adb, ['-s', device, 'shell', 'wm', 'size']).stdout;
   const m = /(\d+)x(\d+)/.exec(size);
   if (m) {
-    const x = Math.round(Number(m[1]) * 0.32);
-    const y = Math.round(Number(m[2]) * 0.915);
+    const x = Math.round(Number(m[1]) * 0.09);
+    const y = Math.round(Number(m[2]) * 0.45);
     run(adb, ['-s', device, 'shell', 'input', 'tap', String(x), String(y)]);
     sleepMs(800);
     const after = grab('screen-after-tap.png');

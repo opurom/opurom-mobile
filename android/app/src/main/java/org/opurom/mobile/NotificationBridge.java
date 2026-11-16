@@ -121,7 +121,9 @@ public final class NotificationBridge {
         }
     }
 
-    /** Typed JNI entry for cancel; an absent id is still a successful no-op. */
+    /** Typed JNI entry for cancel; an absent id is still a successful no-op.
+     *  shortcut: the Java bridge supports cancel, but the source PlatformCall
+     *  surface currently reaches only post. */
     public static int callCancel(Context context, int id) {
         try {
             cancel(context, id);

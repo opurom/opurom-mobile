@@ -1,614 +1,158 @@
 package org.opurom.mobile;
 
-import android.animation.ObjectAnimator;
 import android.app.Activity;
-import android.content.res.ColorStateList;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffXfermode;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.RippleDrawable;
+import android.graphics.RectF;
 import android.os.Bundle;
-import android.view.WindowManager;
-import android.util.TypedValue;
-import android.view.Gravity;
+import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.animation.DecelerateInterpolator;
-import android.view.animation.OvershootInterpolator;
-import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
+import android.view.Window;
+import android.view.WindowManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Opurom Android host: a native adaptive shell around one self-drawn Opurom
- * frame. The frame renders graphics (glass, particles, cards) through JNI;
- * all typography and controls are native widgets so text uses the platform
- * typeface at every density. The shell reflows from one column on a phone to
- * two columns on a tablet and a navigation rail plus content plus detail
- * column on a desktop-width window.
+ * Full-screen Opurom host. Every visible pixel comes from the compiled IR frame;
+ * the only Android view is the surface that draws those pixels and forwards
+ * touch coordinates to the native hit test and tap dispatcher.
  */
 public final class MainActivity extends Activity {
-
     private static final String GRAPHICS_IR = "dashboard.opuir.json";
-    /** Intent extra selecting which packaged IR asset drives the self-drawn frame. */
     private static final String IR_EXTRA = "org.opurom.mobile.IR";
-    /** Packaged IR filenames only; no separators, so a hostile extra cannot escape assets. */
     private static final java.util.regex.Pattern IR_NAME =
             java.util.regex.Pattern.compile("[A-Za-z0-9_-]+\\.opuir\\.json");
     private static final java.util.regex.Pattern SYSTEM_MODE =
             java.util.regex.Pattern.compile("\"mode\"\\s*:\\s*\"system\"");
     private static final java.util.regex.Pattern FONT_METRICS =
             java.util.regex.Pattern.compile("\"fontMetrics\"\\s*:\\s*\"proportional\"");
-    /** Opens the `theme` object so a default metrics key can be injected right after it. */
     private static final java.util.regex.Pattern THEME_OPEN =
             java.util.regex.Pattern.compile("\"theme\"\\s*:\\s*\\{");
     private static final int MAX_FRAME_PIXELS = 1024;
+    private static final String TOUCH_TAG = "OpuromTouch";
 
-    // IR assets are sealed with AES-256-GCM before packaging so the compiled UI
-    // is not readable as plain text from an unpacked APK. The key is derived
-    // from a fixed application secret; a determined attacker can still reach the
-    // packaged bytes, but the asset is no longer plain text.
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
     private static final int GCM_IV_BYTES = 12;
     private static final int GCM_TAG_BITS = 128;
 
-    // Column breakpoints mirror the renderer's width tiers: the shell and the
-    // software renderer reflow at the same logical-pixel boundaries.
-    private static final int WIDE_COLUMN_DP = 600;
-    private static final int THREE_COLUMN_DP = 1200;
-
-    private static final int TIER_COMPACT = 0;
-    private static final int TIER_TWO_COLUMN = 1;
-    private static final int TIER_THREE_COLUMN = 2;
-
-    private static final String[] VIEWS = {"Overview", "Activity", "Status"};
-
-    private static final String[] TASKS = {
-            "Inspect the north array", "Calibrate the panel", "Publish the field report"
-    };
-
-    private final boolean[] done = {false, false, false};
-
-    private byte[] graphicsIr;
-    private int remaining = 3;
-    private boolean dark;
-
-    // Multi-page routing: the pushed pages on top of the IR initialRoute. An
-    // empty stack means the frame renders the initial route; a single-page IR
-    // leaves initialRoute null and the stack is never used (frames unchanged).
-    // A pushed page is rendered as its own tree, so a push and the matching pop
-    // always reproduce the initial frame byte-for-byte.
-    private String initialRoute;
-    private final Deque<String> routeStack = new ArrayDeque<>();
-
-    private ImageView frameView;
-    private TextView remainingValue;
-    private TextView statusValue;
-    private TextView refreshGlyph;
-    private LinearLayout taskRows;
-    private int lastMeasuredWidth = -1;
-    private int lastMeasuredHeight = -1;
-
-    private Bitmap lastFrame;
-
-    // One persistent renderer for the current frame viewport. Rendering through it
-    // lets the renderer reuse the previous frame, so a state change recomputes only
-    // the dirty region instead of the whole surface. Recreated when the measured
-    // viewport changes; zero (disabled) falls back to the one-shot renderer.
-    private long renderer;
-    private int rendererWidth;
-    private int rendererHeight;
-
-    // Detail-column view switching: one stats card and one task card are moved
-    // between the detail panels so the selected view shows one live instance.
-    private LinearLayout detailContent;
-    private LinearLayout statsCard;
-    private LinearLayout taskCard;
-    private LinearLayout[] navRows = new LinearLayout[VIEWS.length];
-    private int activeView;
-
-    // Palette resolved once per configuration; the self-drawn frame keeps its
-    // own colours so pixel parity with the software renderer is preserved.
-    private int background;
-    private int card;
-    private int text;
-    private int muted;
-    private int divider;
-    private int accent;
-    private int brandTop;
-    private int brandBottom;
-    private int onBrand;
-    private int positive;
-    // Native caption typeface: the IR's theme.fontMetrics selects proportional
-    // (sans-serif) or fixed (monospace) for the shell's own labels. The
-    // self-drawn frame is unaffected; it stays under the JNI boundary.
-    private String captionFace = "sans-serif";
-
-    // Hot reload: the CLI pushes a plaintext IR file into the app's files dir and
-    // broadcasts RELOAD_ACTION; the live activity re-reads it and re-renders over
-    // the retained state. A full reload (schema/shell change) reinstalls the APK.
     public static final String RELOAD_ACTION = "org.opurom.mobile.RELOAD";
     public static final String RELOAD_FILE = "opurom-reload.opuir.json";
     private static MainActivity live;
+
+    private byte[] graphicsIr;
+    private byte[] stateJson = "{}".getBytes(StandardCharsets.UTF_8);
+    private boolean dark;
+    private IrView view;
+    private Bitmap lastFrame;
+    private long renderer;
+    private int rendererWidth;
+    private int rendererHeight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         live = this;
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         dark = (getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        resolvePalette();
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
 
         System.loadLibrary("opurom_mobile");
         applyIr(resolveFontMetrics(resolveSystemMode(readAsset(selectedIrAsset()), dark)));
-
-        getWindow().setStatusBarColor(brandBottom);
-        getWindow().setNavigationBarColor(background);
         requestHighestRefreshRate();
 
-        // Actions live outside the scrollable area so they stay clickable at
-        // every scroll offset; a ScrollView child with wrap_content height can
-        // otherwise leave its last row outside the touchable bounds.
-        LinearLayout root = column(0);
-        root.setBackgroundColor(background);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(background);
-        scroll.setFillViewport(true);
-        scroll.setVerticalScrollBarEnabled(false);
-        LinearLayout page = column(0);
-        int pagePad = dp(18);
-        page.setPadding(pagePad, dp(18), pagePad, dp(12));
-        page.addView(buildHeader());
-        page.addView(buildBody(layoutTier(getResources().getConfiguration().screenWidthDp)));
-        scroll.addView(page, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        LinearLayout dock = column(0);
-        dock.setBackgroundColor(background);
-        dock.setPadding(pagePad, dp(10), pagePad, dp(18));
-        dock.addView(buildActions());
-        dock.addView(buildVersionLine());
-        dock.setElevation(dp(10));
-        root.addView(dock, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        setContentView(root);
+        view = new IrView(this);
+        setContentView(view);
+        view.post(this::renderFrame);
     }
 
-    // ------------------------------------------------------------------
-    // Layout. Widths are measured in dp so the same structure works from a
-    // 320 dp phone to a desktop-width window; the width decides the column
-    // count. layoutTier is package-visible so the column rule stays testable
-    // without an emulator.
-    // ------------------------------------------------------------------
-    /** One column below 600 dp, two up to 1199 dp, three at 1200 dp and above. */
-    static int layoutTier(int widthDp) {
-        if (widthDp >= THREE_COLUMN_DP) return TIER_THREE_COLUMN;
-        if (widthDp >= WIDE_COLUMN_DP) return TIER_TWO_COLUMN;
-        return TIER_COMPACT;
-    }
+    /** The only view in the app: draws IR pixels and maps touches back to IR nodes. */
+    static final class IrView extends View {
+        private final MainActivity host;
 
-    private View buildHeader() {
-        GradientDrawable bg = lamina(22, 0x33FFFFFF);
-        LinearLayout header = column(dp(20));
-        header.setBackground(bg);
-        header.setElevation(dp(8));
-
-        TextView brand = label("Opurom", 24, Typeface.create("sans-serif-medium", Typeface.NORMAL),
-                onBrand);
-        brand.setLetterSpacing(0.09f);
-        header.addView(brand);
-
-        TextView subtitle = label("Field Service  ·  one IR, every screen", 13,
-                Typeface.create("sans-serif", Typeface.NORMAL), 0xCCEAF6F2);
-        subtitle.setPadding(0, dp(4), 0, 0);
-        subtitle.setLetterSpacing(0.02f);
-        header.addView(subtitle);
-
-        LinearLayout badgeRow = new LinearLayout(this);
-        badgeRow.setOrientation(LinearLayout.HORIZONTAL);
-        badgeRow.setPadding(0, dp(14), 0, 0);
-        badgeRow.addView(pill("LIVE RENDERER", 0x2BFFFFFF, onBrand));
-        badgeRow.addView(pill("0.1.0 IR", 0x1A000000, 0xCCEAF6F2));
-        header.addView(badgeRow);
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(18);
-        header.setLayoutParams(lp);
-        return header;
-    }
-
-    private View buildBody(int tier) {
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(tier == TIER_COMPACT ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        body.setBaselineAligned(false);
-
-        LinearLayout renderer = rendererColumn();
-        LinearLayout detail = detailColumn();
-
-        if (tier == TIER_THREE_COLUMN) {
-            // Navigation rail, then the renderer column, then the selected detail view.
-            body.addView(buildNavRail(), new LinearLayout.LayoutParams(
-                    dp(210), LinearLayout.LayoutParams.WRAP_CONTENT));
-            body.addView(renderer, weighted(1.15f));
-            body.addView(detail, weighted(0.85f));
-        } else if (tier == TIER_TWO_COLUMN) {
-            body.addView(renderer, weighted(1.15f));
-            body.addView(detail, weighted(0.85f));
-        } else {
-            body.addView(renderer, singleColumnParams());
-            LinearLayout.LayoutParams lower = singleColumnParams();
-            lower.topMargin = dp(14);
-            body.addView(detail, lower);
+        IrView(MainActivity host) {
+            super(host);
+            this.host = host;
+            setFocusable(true);
         }
-        return body;
-    }
 
-    private LinearLayout rendererColumn() {
-        LinearLayout column = cardColumn();
-        column.addView(sectionTitle("Renderer output"));
-        column.addView(sectionCaption("Self-drawn RGBA frame · glass, particles, cards"));
-        column.addView(buildFrameCard());
-        return column;
-    }
-
-    private LinearLayout detailColumn() {
-        // One detail container; the navigation rail swaps its content per view.
-        detailContent = cardColumn();
-        buildStatsCard();
-        buildTaskCard();
-        selectDetail(0);
-        return detailContent;
-    }
-
-    /**
-     * Fills the detail container with the selected view. The stats and task
-     * cards are moved rather than rebuilt, so one set of state is on screen at
-     * a time instead of two instances of the same card.
-     */
-    private void selectDetail(int index) {
-        activeView = index;
-        detailContent.removeAllViews();
-        if (index == 1) {
-            detailContent.addView(sectionTitle("Tasks"));
-            detailContent.addView(taskCard, detailCardParams());
-        } else if (index == 2) {
-            detailContent.addView(sectionTitle("Session"));
-            detailContent.addView(statsCard, detailCardParams());
-        } else {
-            detailContent.addView(sectionTitle("Session"));
-            detailContent.addView(statsCard, detailCardParams());
-            detailContent.addView(sectionTitle("Tasks"));
-            detailContent.addView(taskCard, detailCardParams());
+        @Override
+        protected void onDraw(Canvas canvas) {
+            Bitmap frame = host.lastFrame;
+            if (frame != null) {
+                canvas.drawBitmap(frame, null,
+                        new RectF(0, 0, getWidth(), getHeight()), null);
+            }
         }
-        for (int i = 0; i < navRows.length; i++) {
-            if (navRows[i] != null) refreshNavRow(navRows[i], i == index);
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                host.onTap(event.getX(), event.getY());
+                return true;
+            }
+            return event.getAction() == MotionEvent.ACTION_DOWN;
         }
     }
 
-    private void onNav(int index) {
-        selectDetail(index);
-    }
-
-    private LinearLayout buildNavRail() {
-        LinearLayout rail = column(0);
-        GradientDrawable railCard = lamina(16, 0x2BFFFFFF);
-
-        LinearLayout headerCard = column(dp(16));
-        headerCard.setBackground(railCard);
-        headerCard.addView(label("Navigation", 16,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), onBrand));
-        TextView subtitle = label("one IR, every screen", 11,
-                Typeface.create("sans-serif", Typeface.NORMAL), 0xCCEAF6F2);
-        subtitle.setPadding(0, dp(4), 0, 0);
-        headerCard.addView(subtitle);
-        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        headerLp.bottomMargin = dp(12);
-        headerCard.setLayoutParams(headerLp);
-        rail.addView(headerCard);
-
-        for (int i = 0; i < VIEWS.length; i++) {
-            navRows[i] = navRow(VIEWS[i], i);
-            LinearLayout.LayoutParams lp = singleColumnParams();
-            lp.topMargin = dp(8);
-            rail.addView(navRows[i], lp);
+    /** Maps a screen coordinate into the render viewport, then dispatches a tap. */
+    private void onTap(float screenX, float screenY) {
+        if (lastFrame == null || rendererWidth <= 0 || view.getWidth() <= 0
+                || view.getHeight() <= 0) {
+            return;
         }
-        return rail;
-    }
-
-    private LinearLayout navRow(String name, int index) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(14), dp(12), dp(14), dp(12));
-        row.addView(label(name, 13,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), text));
-        row.setTag(index);
-        row.setOnClickListener(view -> onNav((Integer) view.getTag()));
-        refreshNavRow(row, index == 0);
-        return row;
-    }
-
-    private void refreshNavRow(LinearLayout row, boolean active) {
-        GradientDrawable shape = active ? lamina(14, 0x2BFFFFFF) : new GradientDrawable();
-        if (!active) {
-            shape.setColor(card);
-            shape.setCornerRadius(dp(14));
-            shape.setStroke(1, divider);
+        int x = (int) Math.round(screenX * rendererWidth / view.getWidth());
+        int y = (int) Math.round(screenY * rendererHeight / view.getHeight());
+        int node = OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
+                rendererWidth, rendererHeight);
+        Log.d(TOUCH_TAG, "node=" + node);
+        if (node == 0) {
+            return;
         }
-        row.setBackground(shape);
-        TextView textView = (TextView) row.getChildAt(0);
-        textView.setTextColor(active ? onBrand : text);
-    }
-
-    private LinearLayout.LayoutParams weighted(float weight) {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, weight);
-        params.leftMargin = dp(9);
-        return params;
-    }
-
-    private LinearLayout.LayoutParams singleColumnParams() {
-        return new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-    }
-
-    private LinearLayout.LayoutParams detailCardParams() {
-        LinearLayout.LayoutParams params = singleColumnParams();
-        params.topMargin = dp(12);
-        return params;
-    }
-
-    private View buildFrameCard() {
-        LinearLayout column = new LinearLayout(this);
-        column.setOrientation(LinearLayout.VERTICAL);
-
-        FrameLayout holder = new FrameLayout(this);
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(card);
-        shape.setCornerRadius(dp(18));
-        shape.setStroke(1, divider);
-        holder.setBackground(shape);
-        holder.setElevation(dp(6));
-
-        frameView = new ImageView(this);
-        // The frame is rendered at the view's measured size, so FIT_XY maps
-        // pixel-for-pixel without distortion.
-        frameView.setScaleType(ImageView.ScaleType.FIT_XY);
-        frameView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        holder.addView(frameView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(frameHeight())));
-
-        // A window can change size without recreating the Activity; re-render
-        // whenever the measured viewport changes so the frame stays tier-sized.
-        frameView.addOnLayoutChangeListener((view, left, top, right, bottom,
-                oldLeft, oldTop, oldRight, oldBottom) -> renderFrameIfSizeChanged());
-        frameView.post(this::renderFrame);
-        column.addView(holder);
-
-        // Native typography sits below the self-drawn frame, never on top of
-        // it: deep ink on the surface keeps the hybrid caption readable over
-        // any rendered background without overlapping the frame's own text.
-        TextView caption = label("Opurom / NATIVE HYBRID", 11,
-                Typeface.create(captionFace, Typeface.NORMAL), muted);
-        caption.setLetterSpacing(0.14f);
-        LinearLayout.LayoutParams captionParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        captionParams.topMargin = dp(10);
-        captionParams.gravity = Gravity.CENTER_HORIZONTAL;
-        column.addView(caption, captionParams);
-        return column;
-    }
-
-    private View buildStatsCard() {
-        LinearLayout box = paddedCard();
-        statsCard = box;
-        remainingValue = label(String.valueOf(remaining), 46,
-                Typeface.create("sans-serif-light", Typeface.NORMAL), accent);
-        remainingValue.setIncludeFontPadding(false);
-        box.addView(remainingValue);
-        box.addView(label("tasks remaining", 13,
-                Typeface.create("sans-serif", Typeface.NORMAL), muted));
-
-        View bar = new View(this);
-        GradientDrawable track = new GradientDrawable();
-        track.setColor(divider);
-        track.setCornerRadius(dp(6));
-        bar.setBackground(track);
-        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(8));
-        barLp.topMargin = dp(16);
-        box.addView(bar, barLp);
-
-        GradientDrawable progress = new GradientDrawable();
-        progress.setColor(accent);
-        progress.setCornerRadius(dp(6));
-        View fill = new View(this);
-        fill.setBackground(progress);
-        LinearLayout.LayoutParams fillLp = new LinearLayout.LayoutParams(0, dp(8), 0.62f);
-        box.addView(fill, fillLp);
-
-        statusValue = label("SYNCED  ·  frame deterministic", 12,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), positive);
-        statusValue.setPadding(0, dp(12), 0, 0);
-        statusValue.setLetterSpacing(0.03f);
-        box.addView(statusValue);
-        return box;
-    }
-
-    private View buildTaskCard() {
-        LinearLayout box = paddedCard();
-        taskCard = box;
-        taskRows = column(0);
-        for (int i = 0; i < TASKS.length; i++) {
-            taskRows.addView(buildTaskRow(i));
+        byte[] out = new byte[Math.max(8192, stateJson.length * 2 + 1024)];
+        int status = OpuromNative.opuTapNode(graphicsIr, stateJson, node, out);
+        Log.d(TOUCH_TAG, "tap=" + node + " status=" + status);
+        if (status != OpuromNative.OK) {
+            return;
         }
-        box.addView(taskRows);
-        return box;
-    }
-
-    private View buildTaskRow(int index) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(9), 0, dp(9));
-
-        TextView marker = label(done[index] ? "✓" : "○", 18,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL),
-                done[index] ? positive : muted);
-        marker.setMinWidth(dp(30));
-        row.addView(marker);
-
-        TextView title = label(TASKS[index], 14,
-                Typeface.create("sans-serif", Typeface.NORMAL), text);
-        row.addView(title, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-
-        row.setTag(index);
-        row.setOnClickListener(view -> {
-            int i = (Integer) view.getTag();
-            done[i] = !done[i];
-            TextView m = (TextView) ((LinearLayout) view).getChildAt(0);
-            m.setText(done[i] ? "✓" : "○");
-            m.setTextColor(done[i] ? positive : muted);
-            animatePress(m);
-        });
-        return row;
-    }
-
-    private View buildActions() {
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(2);
-        bar.setLayoutParams(lp);
-
-        LinearLayout refresh = actionButton("Refresh", true);
-        refreshGlyph = (TextView) refresh.getChildAt(0);
-        refreshGlyph.setText("⟳  REFRESH");
-        refresh.setOnClickListener(view -> onRefresh());
-        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
-        bar.addView(refresh, refreshLp);
-
-        LinearLayout reset = actionButton("Reset", false);
-        ((TextView) reset.getChildAt(0)).setText("RESET");
-        reset.setOnClickListener(view -> onReset());
-        LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(0, dp(52), 0.55f);
-        resetLp.leftMargin = dp(12);
-        bar.addView(reset, resetLp);
-
-        // Multi-page IR: a Detail control that pushes the first route other than
-        // the current page, mirroring a tap that yields a @nav push patch.
-        String detail = pushTarget();
-        if (detail != null) {
-            LinearLayout open = actionButton("Open " + detail, false);
-            ((TextView) open.getChildAt(0)).setText("⇢  " + detail.toUpperCase(java.util.Locale.ROOT));
-            open.setOnClickListener(view -> applyNav(detail));
-            LinearLayout.LayoutParams openLp = new LinearLayout.LayoutParams(0, dp(52), 0.7f);
-            openLp.leftMargin = dp(12);
-            bar.addView(open, openLp);
-        }
-        return bar;
-    }
-
-    /** The first declared route that differs from the current page, or null for a single-page IR. */
-    private String pushTarget() {
-        if (initialRoute == null) return null;
-        String current = routeStack.peek();
-        String fallback = null;
-        for (int i = 0; ; i++) {
-            String name = OpuromNative.routeAt(graphicsIr, i);
-            if (name == null) break;
-            if (fallback == null) fallback = name;
-            if (!name.equals(current)) return name;
-        }
-        return fallback != null && !fallback.equals(current) ? fallback : null;
-    }
-
-    private void onRefresh() {
-        remaining += 1;
-        animateNumber(remainingValue, String.valueOf(remaining));
-        ObjectAnimator spin = ObjectAnimator.ofFloat(refreshGlyph, "rotation", 0f, 360f);
-        spin.setDuration(520);
-        spin.setInterpolator(new DecelerateInterpolator());
-        spin.start();
-        statusValue.setText("RE-RENDERED  ·  frame deterministic");
+        stateJson = trim(out);
         renderFrame();
     }
 
-    private void onReset() {
-        remaining = 0;
-        animateNumber(remainingValue, String.valueOf(remaining));
-        statusValue.setText("RESET  ·  frame deterministic");
-        for (int i = 0; i < done.length; i++) {
-            done[i] = false;
-            LinearLayout row = (LinearLayout) taskRows.getChildAt(i);
-            TextView m = (TextView) row.getChildAt(0);
-            m.setText("○");
-            m.setTextColor(muted);
+    private static byte[] trim(byte[] data) {
+        int length = 0;
+        while (length < data.length && data[length] != 0) {
+            length += 1;
         }
-        renderFrame();
+        return Arrays.copyOf(data, length);
     }
 
-    // ------------------------------------------------------------------
-    // Self-drawn frame. The viewport follows the actual view size, so the
-    // frame fills its card instead of sitting centered at a fixed 480x320.
-    // ------------------------------------------------------------------
+    /** Renders the current IR and state into a bitmap sized to the view. */
     private void renderFrame() {
-        if (frameView == null) return;
-        int measuredWidth = frameView.getWidth();
-        int measuredHeight = frameView.getHeight();
-        if (measuredWidth <= 0 || measuredHeight <= 0) return;
-        lastMeasuredWidth = measuredWidth;
-        lastMeasuredHeight = measuredHeight;
-
-        // The renderer lays out in logical pixels: feed it dp, not raw device
-        // pixels, so the breakpoint tier matches the host and a phone frame is
-        // laid out compact instead of stretched over a wide-viewport grid.
-        float density = getResources().getDisplayMetrics().density;
-        int width = Math.max(1, (int) (measuredWidth / density));
-        int height = Math.max(1, (int) (measuredHeight / density));
-        // Render at the view's aspect ratio: capping both dimensions by the same
-        // factor keeps the bitmap proportional, so FIT_XY fills the card without
-        // letterbox bars or a stretched frame at wide window sizes.
-        float scale = Math.min(1f, MAX_FRAME_PIXELS / Math.max(width, height));
-        width = Math.max(1, (int) (width * scale));
-        height = Math.max(1, (int) (height * scale));
-
-        byte[] state = ("{\"remaining\":" + remaining + "}")
-                .getBytes(StandardCharsets.UTF_8);
+        int viewWidth = view.getWidth();
+        int viewHeight = view.getHeight();
+        if (viewWidth <= 0 || viewHeight <= 0) {
+            return;
+        }
+        float scale = Math.min(1f, (float) MAX_FRAME_PIXELS
+                / Math.max(viewWidth, viewHeight));
+        int width = Math.max(1, (int) (viewWidth * scale));
+        int height = Math.max(1, (int) (viewHeight * scale));
         byte[] pixels = new byte[width * height * 4];
-        // Keep one renderer per viewport so the renderer can reuse the previous
-        // frame. Recreate it when the measured viewport changes; if creation fails,
-        // fall back to the one-shot renderer rather than failing the frame.
-        if (renderer != 0
-                && (rendererWidth != width || rendererHeight != height)) {
+
+        if (renderer != 0 && (rendererWidth != width || rendererHeight != height)) {
             OpuromNative.opuRendererFree(renderer);
             renderer = 0;
         }
@@ -619,449 +163,33 @@ public final class MainActivity extends Activity {
                 rendererHeight = height;
             }
         }
-        int status;
-        if (initialRoute == null) {
-            // Single-page IR: byte-identical to the pre-routing path.
-            status = renderer != 0
-                ? OpuromNative.opuRendererFrame(renderer, graphicsIr, state, pixels, width, height)
-                : OpuromNative.opuFrameFromIr(graphicsIr, state, pixels, width, height);
-        } else {
-            // Multi-page IR: render the current page. A null route means the
-            // native side falls back to initialRoute, which is the current page
-            // while the pushed stack is empty.
-            byte[] route = currentRouteBytes();
-            status = renderer != 0
-                ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, state, route, pixels,
-                        width, height)
-                : OpuromNative.opuFrameFromIrRoute(graphicsIr, state, route, pixels, width, height);
-        }
+        int status = renderer != 0
+                ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
+                        null, pixels, width, height)
+                : OpuromNative.opuFrameFromIrRoute(graphicsIr, stateJson,
+                        null, pixels, width, height);
         if (status != OpuromNative.OK) {
             throw new IllegalStateException("frame render failed with status " + status);
         }
         int[] argb = new int[width * height];
-        for (int index = 0; index < argb.length; index++) {
+        for (int index = 0; index < argb.length; index += 1) {
             int offset = index * 4;
             argb[index] = ((pixels[offset + 3] & 0xff) << 24)
                     | ((pixels[offset] & 0xff) << 16)
                     | ((pixels[offset + 1] & 0xff) << 8)
                     | (pixels[offset + 2] & 0xff);
         }
-        Bitmap next = Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888);
-        next = rounded(next, dp(18));
-        if (lastFrame != null) {
-            frameView.setAlpha(0.35f);
-            frameView.animate().alpha(1f).setDuration(280).start();
-        }
-        frameView.setImageBitmap(next);
-        lastFrame = next;
+        lastFrame = Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888);
+        view.invalidate();
     }
 
-    // The frame view can change size without a state change; re-render only when
-    // its measured viewport actually changed so a reflow is not re-rendered twice.
-    private void renderFrameIfSizeChanged() {
-        if (frameView == null) return;
-        int measuredWidth = frameView.getWidth();
-        int measuredHeight = frameView.getHeight();
-        if (measuredWidth <= 0 || measuredHeight <= 0) return;
-        if (measuredWidth == lastMeasuredWidth && measuredHeight == lastMeasuredHeight) return;
-        renderFrame();
-    }
-
-    // ------------------------------------------------------------------
-    // Route stack. Mirrors the renderer's reserved @nav patches: a route name
-    // pushes that page, ".." pops it. The root page (initialRoute) is never
-    // popped, so the stack bottoms out at the entry frame.
-    // ------------------------------------------------------------------
-
-    /** UTF-8 bytes of the current page key, or null to let native use initialRoute. */
-    private byte[] currentRouteBytes() {
-        String top = routeStack.peek();
-        return top == null ? null : top.getBytes(StandardCharsets.UTF_8);
-    }
-
-    /** Applies one @nav value: a route name pushes, ".." pops. No-op on a single-page IR. */
-    private void applyNav(String value) {
-        if (initialRoute == null || value == null) return;
-        if ("..".equals(value)) {
-            popRoute();
-        } else {
-            pushRoute(value);
-        }
-    }
-
-    private void pushRoute(String name) {
-        routeStack.push(name);
-        renderFrame();
-        if (frameView != null) {
-            frameView.setAlpha(0.35f);
-            frameView.animate().alpha(1f).setDuration(280).start();
-        }
-    }
-
-    /** Pops one pushed page; returns false (and does nothing) at the root page. */
-    private boolean popRoute() {
-        if (routeStack.isEmpty()) {
-            return false;
-        }
-        routeStack.pop();
-        renderFrame();
-        return true;
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (!popRoute()) {
-            super.onBackPressed();
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Widgets and motion.
-    // ------------------------------------------------------------------
-    private void animatePress(View view) {
-        ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.9f, 1f).setDuration(220).start();
-        ObjectAnimator.ofFloat(view, "scaleY", 1f, 0.9f, 1f).setDuration(220).start();
-    }
-
-    private void animateNumber(TextView view, String value) {
-        view.animate().alpha(0.25f).setDuration(110)
-                .withEndAction(() -> {
-                    view.setText(value);
-                    view.animate().alpha(1f).setDuration(180).start();
-                }).start();
-    }
-
-    // The design-system reference defines five control states. Android selects
-    // these by view state, so hover/active/focus/disabled are declarative and
-    // deterministic rather than driven by ad-hoc animation callbacks.
-    private static ColorStateList controlColors(int normal, int hovered,
-            int active, int focused, int disabled) {
-        final int[][] states = {
-            {-android.R.attr.state_enabled},
-            {android.R.attr.state_pressed},
-            {android.R.attr.state_focused},
-            {android.R.attr.state_hovered},
-            {}
-        };
-        return new ColorStateList(states,
-                new int[] {disabled, active, focused, hovered, normal});
-    }
-
-    private LinearLayout actionButton(String name, boolean primary) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setCornerRadius(dp(14));
-        if (primary) {
-            shape.setColor(controlColors(brandBottom, 0xFF0C7DFD, 0xFF0551DF,
-                    0xFF0DB2FF, 0xFFB7C4D6));
-        } else {
-            shape.setColor(controlColors(card, 0xFFEAF2FF, 0xFFDCE4EF,
-                    0xFFF2F8FF, 0xFFEEF1F5));
-            shape.setStroke(1, divider);
-        }
-        RippleDrawable ripple = new RippleDrawable(
-                ColorStateList.valueOf(primary ? 0x33FFFFFF : 0x1A0A71FC), shape, shape);
-        LinearLayout button = new LinearLayout(this);
-        button.setBackground(ripple);
-        button.setFocusable(true);
-        button.setClickable(true);
-        button.setGravity(Gravity.CENTER);
-        button.setElevation(dp(primary ? 6 : 2));
-        TextView text = label(name.toUpperCase(), 13,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL),
-                primary ? onBrand : accent);
-        text.setTextColor(controlColors(primary ? onBrand : accent,
-                primary ? onBrand : 0xFF0A71FC,
-                primary ? onBrand : 0xFF0551DF,
-                primary ? onBrand : 0xFF0A71FC,
-                primary ? 0xFFF2F5FA : 0xFF9AA7BA));
-        text.setLetterSpacing(0.08f);
-        button.addView(text);
-        button.setOnTouchListener((view, event) -> {
-            if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
-                view.animate().scaleX(0.96f).scaleY(0.96f).setDuration(90).start();
-            } else if (event.getAction() == android.view.MotionEvent.ACTION_UP
-                    || event.getAction() == android.view.MotionEvent.ACTION_CANCEL) {
-                view.animate().scaleX(1f).scaleY(1f)
-                        .setInterpolator(new OvershootInterpolator()).setDuration(240).start();
-            }
-            return false;
-        });
-        return button;
-    }
-
-    private void requestHighestRefreshRate() {
-        // Devices expose 90/120 Hz modes; pick the fastest supported mode so
-        // scrolling and press animations are not capped at 60 Hz.
-        WindowManager.LayoutParams attrs = getWindow().getAttributes();
-        float best = 0f;
-        for (android.view.Display.Mode mode : getDisplay().getSupportedModes()) {
-            if (mode.getRefreshRate() > best) {
-                best = mode.getRefreshRate();
-                attrs.preferredDisplayModeId = mode.getModeId();
-            }
-        }
-        if (best > 0f) getWindow().setAttributes(attrs);
-    }
-
-    private Bitmap rounded(Bitmap source, int radius) {
-        Bitmap out = Bitmap.createBitmap(source.getWidth(), source.getHeight(),
-                Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(out);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        android.graphics.RectF rect = new android.graphics.RectF(
-                0, 0, source.getWidth(), source.getHeight());
-        canvas.drawRoundRect(rect, radius, radius, paint);
-        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
-        canvas.drawBitmap(source, 0, 0, paint);
-        source.recycle();
-        return out;
-    }
-
-    private TextView buildVersionLine() {
-        String version = "";
-        try {
-            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-        } catch (android.content.pm.PackageManager.NameNotFoundException ignored) {
-            // The package is always installed while this Activity runs.
-        }
-        TextView view = label("Opurom  ·  v" + (version == null ? "0.1.0" : version)
-                        + "  ·  API 36  ·  NDK capabilityc", 10,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), muted);
-        view.setLetterSpacing(0.08f);
-        view.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(12);
-        view.setLayoutParams(lp);
-        return view;
-    }
-
-    // ------------------------------------------------------------------
-    // Small helpers. All sizes come from dp/sp so density never changes the
-    // visual proportions; the palette is the only configuration-dependent part.
-    // ------------------------------------------------------------------
-    // Semantic theme. The IR's theme.tokens/theme.accent drive the native
-    // chrome colours that map to semantic roles; any absent token keeps the
-    // measured default from resolvePalette. The frame keeps its own palette,
-    // so frame digest parity is untouched.
-    // ------------------------------------------------------------------
-    private void applyThemeTokens(String ir) {
-        ThemeTokens.Palette theme = ThemeTokens.resolve(ir);
-        // A zero field means the IR declared no such token: keep the
-        // mode-measured palette resolvePalette already set (light and dark
-        // differ), so an IR without tokens leaves the chrome unchanged.
-        if (theme.success != 0) positive = theme.success;
-        // The Instance accent carries primary actions and the progress fill.
-        if (theme.accent != 0) {
-            accent = theme.accent;
-            brandBottom = theme.accent;
-        }
-        // Honor proportional type for the native captions where feasible:
-        // a proportional system family vs a fixed-width one. Fixed glyph
-        // advances are a pixel-grid concern of the self-drawn frame; the native
-        // TextViews already use the platform system face, so this only swaps
-        // the family for the shell's own labels.
-        captionFace = themeFontMetrics(ir) ? "sans-serif" : "monospace";
-    }
-
-    /** True when the IR selects proportional text metrics ({@code theme.fontMetrics}). */
-    static boolean themeFontMetrics(String ir) {
-        return ir != null
-                && FONT_METRICS.matcher(ir).find();
-    }
-
-    private void resolvePalette() {
-        // Defaults mirror the framework design-system reference: a cyan-to-blue
-        // brand ramp, deep-ink text on neutral surfaces and semantic success.
-        if (dark) {
-            background = 0xFF0E1729;
-            card = 0xFF16223B;
-            text = 0xFFEAF1FB;
-            muted = 0xFF94A6BF;
-            divider = 0xFF2A3A55;
-            accent = 0xFF0DB2FF;
-            brandTop = 0xFF0DB2FF;
-            brandBottom = 0xFF0551DF;
-            onBrand = 0xFFFFFFFF;
-            positive = 0xFF23CA77;
-        } else {
-            background = 0xFFF4F6F9;
-            card = 0xFFFFFFFF;
-            text = 0xFF132C5A;
-            muted = 0xFF5A6478;
-            divider = 0xFFDCE4EF;
-            accent = 0xFF0A71FC;
-            brandTop = 0xFF0DB2FF;
-            brandBottom = 0xFF0A71FC;
-            onBrand = 0xFFFFFFFF;
-            positive = 0xFF1FB14C;
-        }
-    }
-
-    private LinearLayout column(int pad) {
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        if (pad > 0) layout.setPadding(pad, pad, pad, pad);
-        return layout;
-    }
-
-    private LinearLayout cardColumn() {
-        LinearLayout layout = column(0);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        return layout;
-    }
-
-    /* A Liquid Glass lamina: one hue, a lighter top edge and a deeper interior,
-     * with a hairline specular stroke. Android Views have no backdrop filter, so
-     * the sheen is baked into a single-hue vertical wash instead of a clashing
-     * two-colour gradient. */
-    private GradientDrawable lamina(int radiusDp, int edgeColor) {
-        GradientDrawable shape = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{brandTop, brandBottom});
-        shape.setCornerRadius(dp(radiusDp));
-        shape.setStroke(1, edgeColor);
-        return shape;
-    }
-
-    private LinearLayout paddedCard() {
-        LinearLayout layout = column(dp(18));
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(card);
-        shape.setCornerRadius(dp(18));
-        shape.setStroke(1, divider);
-        layout.setBackground(shape);
-        layout.setElevation(dp(6));
-        return layout;
-    }
-
-    private TextView sectionTitle(String value) {
-        TextView view = label(value.toUpperCase(), 12,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), muted);
-        view.setLetterSpacing(0.12f);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(3);
-        view.setLayoutParams(lp);
-        return view;
-    }
-
-    private TextView sectionCaption(String value) {
-        TextView view = label(value, 12,
-                Typeface.create(captionFace, Typeface.NORMAL), muted);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(12);
-        view.setLayoutParams(lp);
-        return view;
-    }
-
-    private TextView label(String value, float sizeSp, Typeface face, int color) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
-        view.setTypeface(face);
-        view.setTextColor(color);
-        return view;
-    }
-
-    private TextView pill(String value, int background, int foreground) {
-        TextView view = label(value, 10,
-                Typeface.create("sans-serif-medium", Typeface.NORMAL), foreground);
-        view.setLetterSpacing(0.10f);
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(background);
-        shape.setCornerRadius(dp(20));
-        view.setBackground(shape);
-        int h = dp(9);
-        int v = dp(5);
-        view.setPadding(h, v, h, v);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.rightMargin = dp(8);
-        view.setLayoutParams(lp);
-        return view;
-    }
-
-    // The frame is taller as more vertical room appears: the desktop tier has
-    // room for the rail, the renderer column and the detail column side by side.
-    // A compact frame stacks the whole tree into one column, so it needs more
-    // height than the desktop tiers: the renderer is fluid and shares the frame
-    // height across every stacked card, so too short a frame squeezes the inner
-    // controls into bare outlines. The page itself scrolls, so a taller frame
-    // never pushes the actions off screen.
-    private int frameHeight() {
-        int tier = layoutTier(getResources().getConfiguration().screenWidthDp);
-        if (tier == TIER_THREE_COLUMN) return 300;
-        if (tier == TIER_TWO_COLUMN) return 260;
-        return 760;
-    }
-
-    private int dp(float value) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value,
-                getResources().getDisplayMetrics());
-    }
-
-    /** Resolve the requested IR asset from the launch intent, with a safe default. */
-    private String selectedIrAsset() {
-        String requested = getIntent() == null ? null : getIntent().getStringExtra(IR_EXTRA);
-        if (requested == null || !IR_NAME.matcher(requested).matches()) {
-            return GRAPHICS_IR;
-        }
-        return requested;
-    }
-
-    // `theme.mode: system` is a host preference, not a renderer query: the
-    // adapter resolves it once from the configuration and hands a concrete
-    // mode to the deterministic kernel. Only the theme mode token is rewritten,
-    // so every other IR byte (including inlined image payloads) is preserved.
-    private static byte[] resolveSystemMode(byte[] ir, boolean dark) {
-        if (!dark) {
-            return ir;
-        }
-        String text = new String(ir, StandardCharsets.UTF_8);
-        java.util.regex.Matcher matcher = SYSTEM_MODE.matcher(text);
-        if (!matcher.find()) {
-            return ir;
-        }
-        return matcher.replaceFirst("\"mode\": \"dark\"")
-                .getBytes(StandardCharsets.UTF_8);
-    }
-
-    // The self-drawn frame defaults to `fixed` glyph metrics, which advances one
-    // full blank glyph column per character; that reads as broken letter spacing
-    // on the large headings ("T e l e m e t r y"). The host opts an IR into
-    // proportional metrics at load time unless it already declares a value, the
-    // same presentation rewrite resolveSystemMode applies to theme.mode. Only the
-    // theme metrics key is added; every other IR byte is preserved.
-    private static byte[] resolveFontMetrics(byte[] ir) {
-        String text = new String(ir, StandardCharsets.UTF_8);
-        if (FONT_METRICS.matcher(text).find()) {
-            return ir;
-        }
-        java.util.regex.Matcher opening = THEME_OPEN.matcher(text);
-        if (!opening.find()) {
-            return ir;
-        }
-        return (text.substring(0, opening.end())
-                + "\"fontMetrics\": \"proportional\","
-                + text.substring(opening.end()))
-                .getBytes(StandardCharsets.UTF_8);
-    }
-
-    // Adopt the given IR bytes as the current frame program. Called once from
-    // onCreate and again on a hot reload: only graphicsIr and the derived route
-    // and theme tokens change, so the app state (remaining, routeStack, task
-    // flags) survives. The native renderer is kept; the frame re-renders over it.
+    /** Replaces the IR program but keeps the current process alive. */
     private void applyIr(byte[] ir) {
         graphicsIr = ir;
-        initialRoute = OpuromNative.initialRoute(graphicsIr);
-        applyThemeTokens(new String(graphicsIr, StandardCharsets.UTF_8));
+        stateJson = "{}".getBytes(StandardCharsets.UTF_8);
     }
 
-    // Re-read the pushed IR file over the current process and re-render. Runs on
-    // the UI thread (posted from the receiver). Returns false when no live
-    // activity or no pushed file is present, so the CLI can report "no reload".
+    /** Reload hook used by the dev CLI; keeps the warm process and state. */
     static boolean reloadFromFile(java.io.File file) {
         MainActivity activity = live;
         if (activity == null || file == null || !file.isFile()) {
@@ -1072,9 +200,45 @@ public final class MainActivity extends Activity {
             activity.applyIr(resolveFontMetrics(resolveSystemMode(ir, activity.dark)));
             activity.renderFrame();
             return true;
-        } catch (java.io.IOException error) {
+        } catch (IOException error) {
             return false;
         }
+    }
+
+    private String selectedIrAsset() {
+        String requested = getIntent() == null ? null : getIntent().getStringExtra(IR_EXTRA);
+        if (requested == null || !IR_NAME.matcher(requested).matches()) {
+            return GRAPHICS_IR;
+        }
+        return requested;
+    }
+
+    private static byte[] resolveSystemMode(byte[] ir, boolean dark) {
+        if (!dark) {
+            return ir;
+        }
+        String text = new String(ir, StandardCharsets.UTF_8);
+        java.util.regex.Matcher matcher = SYSTEM_MODE.matcher(text);
+        if (!matcher.find()) {
+            return ir;
+        }
+return matcher.replaceFirst("\"mode\": \"dark\"")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] resolveFontMetrics(byte[] ir) {
+        String text = new String(ir, StandardCharsets.UTF_8);
+        if (FONT_METRICS.matcher(text).find()) {
+            return ir;
+        }
+        java.util.regex.Matcher opening = THEME_OPEN.matcher(text);
+        if (!opening.find()) {
+            return ir;
+        }
+        return (text.substring(0, opening.end())
++ "\"fontMetrics\": \"proportional\","
+                + text.substring(opening.end()))
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] readAsset(String name) {
@@ -1094,8 +258,6 @@ public final class MainActivity extends Activity {
         }
     }
 
-    // Sealed assets carry the magic, a 12-byte IV and a GCM tag; the tag is the
-    // final 16 bytes of the blob handed to doFinal so tampering fails loudly.
     private static byte[] unseal(byte[] data, String name) {
         if (data.length < ASSET_MAGIC.length + GCM_IV_BYTES + GCM_TAG_BITS / 8
                 || !startsWith(data, ASSET_MAGIC)) {
@@ -1103,20 +265,32 @@ public final class MainActivity extends Activity {
         }
         try {
             byte[] iv = Arrays.copyOfRange(data, ASSET_MAGIC.length,
-                ASSET_MAGIC.length + GCM_IV_BYTES);
+                    ASSET_MAGIC.length + GCM_IV_BYTES);
             byte[] blob = Arrays.copyOfRange(data,
-                ASSET_MAGIC.length + GCM_IV_BYTES, data.length);
+                    ASSET_MAGIC.length + GCM_IV_BYTES, data.length);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(ASSET_KEY, "AES"),
-                new GCMParameterSpec(GCM_TAG_BITS, iv));
+                    new GCMParameterSpec(GCM_TAG_BITS, iv));
             return cipher.doFinal(blob);
         } catch (Exception error) {
             throw new IllegalStateException("cannot unseal IR asset " + name, error);
         }
     }
 
-    // System permission verdicts land here after the dialog; dispatch routes
-    // them to the one armed PermissionBridge callback and ignores foreign codes.
+    private void requestHighestRefreshRate() {
+        WindowManager.LayoutParams attrs = getWindow().getAttributes();
+        float best = 0f;
+        for (android.view.Display.Mode mode : getDisplay().getSupportedModes()) {
+            if (mode.getRefreshRate() > best) {
+                best = mode.getRefreshRate();
+                attrs.preferredDisplayModeId = mode.getModeId();
+            }
+        }
+        if (best > 0f) {
+            getWindow().setAttributes(attrs);
+        }
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions,
             int[] grantResults) {
@@ -1136,9 +310,6 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    // Receives RELOAD_ACTION from the dev CLI after a new IR is pushed into the
-    // app files dir. Posts the swap to the UI thread so renderFrame runs where
-    // the current viewport is valid; the process stays warm and state is kept.
     public static final class ReloadReceiver extends android.content.BroadcastReceiver {
         @Override
         public void onReceive(android.content.Context context, android.content.Intent intent) {
@@ -1157,16 +328,20 @@ public final class MainActivity extends Activity {
     private static byte[] digestKey(String secret) {
         try {
             return MessageDigest.getInstance("SHA-256")
-                .digest(secret.getBytes(StandardCharsets.UTF_8));
+                    .digest(secret.getBytes(StandardCharsets.UTF_8));
         } catch (Exception error) {
             throw new IllegalStateException("asset key digest unavailable", error);
         }
     }
 
     private static boolean startsWith(byte[] data, byte[] prefix) {
-        if (data.length < prefix.length) return false;
+        if (data.length < prefix.length) {
+            return false;
+        }
         for (int i = 0; i < prefix.length; i += 1) {
-            if (data[i] != prefix[i]) return false;
+            if (data[i] != prefix[i]) {
+                return false;
+            }
         }
         return true;
     }
