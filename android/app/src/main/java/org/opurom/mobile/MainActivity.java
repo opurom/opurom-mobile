@@ -1115,6 +1115,15 @@ public final class MainActivity extends Activity {
         }
     }
 
+    // System permission verdicts land here after the dialog; dispatch routes
+    // them to the one armed PermissionBridge callback and ignores foreign codes.
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        PermissionBridge.dispatch(requestCode, permissions, grantResults);
+    }
+
     @Override
     protected void onDestroy() {
         if (live == this) {

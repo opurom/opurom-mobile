@@ -15,6 +15,10 @@
     <!-- The socket capability: without this permission every TCP connect on the
          device fails with a SecurityException at the first socket call. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Runtime-permission capability: notifications (API 33+) and microphone
+         are asked at runtime by PermissionBridge; both are declared here. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:label="@string/app_name"
