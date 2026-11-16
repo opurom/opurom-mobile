@@ -69,6 +69,10 @@ public final class MainActivity extends Activity {
     private long renderer;
     private int rendererWidth;
     private int rendererHeight;
+    // One transform for both the graphics bitmap and the text overlay. Set in
+    // renderFrame; read-only afterwards until the next frame.
+    private float frameScaleX = 1f;
+    private float frameScaleY = 1f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,8 +113,11 @@ public final class MainActivity extends Activity {
         protected void onDraw(Canvas canvas) {
             Bitmap frame = host.lastFrame;
             if (frame != null) {
+                // Same transform the text overlay uses: bitmap pixels are
+                // rendererWidth x rendererHeight, scaled once into the view.
                 canvas.drawBitmap(frame, null,
-                        new RectF(0, 0, getWidth(), getHeight()), null);
+                        new RectF(0, 0, host.rendererWidth * host.frameScaleX,
+                                host.rendererHeight * host.frameScaleY), null);
             }
         }
 
@@ -162,8 +169,10 @@ public final class MainActivity extends Activity {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            float scaleX = (float) getWidth() / Math.max(1, host.rendererWidth);
-            float scaleY = (float) getHeight() / Math.max(1, host.rendererHeight);
+            // Never recompute a second scale: both layers must use the exact
+            // transform applied to the graphics bitmap in IrView.onDraw.
+            float scaleX = host.frameScaleX;
+            float scaleY = host.frameScaleY;
             for (int index = 0; index < spans.length(); index += 1) {
                 JSONObject span = spans.optJSONObject(index);
                 if (span == null) {
@@ -181,7 +190,12 @@ public final class MainActivity extends Activity {
                 float textSize = 7f * Math.max(1, span.optInt("size", 1)) * scaleY;
                 paint.setTextSize(textSize);
                 String align = span.optString("align", "start");
-                paint.setTextAlign("center".equals(align) ? Paint.Align.CENTER
+                JSONArray origin = span.optJSONArray("origin");
+                boolean hasOrigin = origin != null && origin.length() == 2;
+                // raster.draw_text ignores the alignment when a glyph origin is
+                // present: the origin is the absolute top-left of the run.
+                paint.setTextAlign(hasOrigin ? Paint.Align.LEFT
+                        : "center".equals(align) ? Paint.Align.CENTER
                         : "end".equals(align) ? Paint.Align.RIGHT : Paint.Align.LEFT);
                 int x = span.optInt("x", 0);
                 int y = span.optInt("y", 0);
@@ -191,10 +205,9 @@ public final class MainActivity extends Activity {
                 float top = y * scaleY;
                 float right = (x + w) * scaleX;
                 float bottom = (y + h) * scaleY;
-                JSONArray origin = span.optJSONArray("origin");
                 float anchorX;
                 float baseline;
-                if (origin != null && origin.length() == 2) {
+                if (hasOrigin) {
                     anchorX = origin.optInt(0, x) * scaleX;
                     baseline = origin.optInt(1, y) * scaleY + textSize;
                 } else {
@@ -270,11 +283,13 @@ public final class MainActivity extends Activity {
         }
         if (renderer == 0) {
             renderer = OpuromNative.opuRendererNew(width, height);
-            if (renderer != 0) {
-                rendererWidth = width;
-                rendererHeight = height;
-            }
         }
+        // Publish the one transform used by both layers on every render, so a
+        // resize or a fallback cannot leave the overlay on an older scale.
+        rendererWidth = width;
+        rendererHeight = height;
+        frameScaleX = (float) viewWidth / width;
+        frameScaleY = (float) viewHeight / height;
         // Preview path: the kernel rasterizes graphics only; all text is
         // painted by TextLayerView with the host system font.
         if (renderer != 0) {

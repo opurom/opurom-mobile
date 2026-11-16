@@ -26,6 +26,11 @@ test('the host paints system-font text over a graphics-only frame', () => {
   assert.match(ACTIVITY, /OpuromNative\.opuRendererSuppressText\(renderer, true\)/);
   assert.match(ACTIVITY, /OpuromNative\.opuFrameSuppressed\(graphicsIr, stateJson,/);
   assert.match(ACTIVITY, /OpuromNative\.opuTextSpans\(graphicsIr, stateJson,/);
+  assert.match(ACTIVITY, /frameScaleX = \(float\) viewWidth \/ width/);
+  assert.match(ACTIVITY, /frameScaleY = \(float\) viewHeight \/ height/);
+  assert.match(ACTIVITY, /host\.rendererWidth \* host\.frameScaleX/);
+  assert.match(ACTIVITY, /float scaleX = host\.frameScaleX/);
+  assert.match(ACTIVITY, /paint\.setTextAlign\(hasOrigin \? Paint\.Align\.LEFT/);
 });
 
 test('text span and suppress ABIs resolve through Java, C and Rust', () => {
