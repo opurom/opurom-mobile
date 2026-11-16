@@ -142,7 +142,7 @@ const shot = grab('screen.png');
 if (!shot) fail('screencap produced no usable PNG');
 else pass(`captured screenshot (${shot.bytes} bytes) -> target/emulator/${path.basename(shot.path)}`);
 
-// 6. Tap the calculator's divide key: at roughly 9% width and 45% height it
+// 6. Tap the calculator's divide key: at roughly 9% width and 19% height it
 //    sets the operator state, which must repaint the IR frame. The app has no
 //    Java controls, so this exercises the real touch-to-hit-to-tap path.
 if (shot) {
@@ -150,7 +150,7 @@ if (shot) {
   const m = /(\d+)x(\d+)/.exec(size);
   if (m) {
     const x = Math.round(Number(m[1]) * 0.09);
-    const y = Math.round(Number(m[2]) * 0.45);
+    const y = Math.round(Number(m[2]) * 0.19);
     run(adb, ['-s', device, 'shell', 'input', 'tap', String(x), String(y)]);
     sleepMs(800);
     const after = grab('screen-after-tap.png');

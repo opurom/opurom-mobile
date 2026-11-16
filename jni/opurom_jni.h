@@ -107,6 +107,17 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuHitTest(
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTapNode(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint node_id, jbyteArray out);
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTextSpans(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint width, jint height,
+    jbyteArray out);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSuppressText(
+    JNIEnv *env, jclass clazz, jlong renderer, jboolean on);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameSuppressed(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray out, jint width,
+    jint height);
+
 #ifdef __cplusplus
 }
 #endif

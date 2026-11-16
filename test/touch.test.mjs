@@ -26,8 +26,9 @@ test('the host draws only IR pixels and has no Java chrome', () => {
   for (const widget of ['TextView', 'ImageView', 'LinearLayout', 'ScrollView', 'Button']) {
     assert.ok(!ACTIVITY.includes(widget), `${widget} must not appear in the host`);
   }
-  assert.ok(!/setBackgroundColor\(|setPadding\(|Typeface\.|GradientDrawable/.test(ACTIVITY),
-    'no Java-owned colours, padding or typefaces');
+  assert.ok(!/setBackgroundColor\(|setPadding\(|GradientDrawable/.test(ACTIVITY),
+    'no Java-owned colours or padding');
+  assert.ok(!/Typeface\.create\(/.test(ACTIVITY), 'no authored font family');
 });
 
 test('touch coordinates flow through hit test into tap dispatch', () => {

@@ -3,13 +3,20 @@ package org.opurom.mobile;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -57,6 +64,7 @@ public final class MainActivity extends Activity {
     private byte[] stateJson = "{}".getBytes(StandardCharsets.UTF_8);
     private boolean dark;
     private IrView view;
+    private TextLayerView textLayer;
     private Bitmap lastFrame;
     private long renderer;
     private int rendererWidth;
@@ -77,7 +85,13 @@ public final class MainActivity extends Activity {
         requestHighestRefreshRate();
 
         view = new IrView(this);
-        setContentView(view);
+        textLayer = new TextLayerView(this);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(view, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(textLayer, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
         view.post(this::renderFrame);
     }
 
@@ -107,6 +121,101 @@ public final class MainActivity extends Activity {
                 return true;
             }
             return event.getAction() == MotionEvent.ACTION_DOWN;
+        }
+    }
+
+    /**
+     * Transparent system-font overlay. Graphics come from the suppressed IR
+     * frame below; every displayed glyph is painted here with Typeface.DEFAULT,
+     * so no 5x7 kernel glyph reaches the preview. Touch falls through to IrView.
+     */
+    static final class TextLayerView extends View {
+        private final MainActivity host;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private JSONArray spans = new JSONArray();
+
+        TextLayerView(MainActivity host) {
+            super(host);
+            this.host = host;
+            setClickable(false);
+            setFocusable(false);
+            paint.setTypeface(Typeface.DEFAULT);
+        }
+
+        void setSpans(String json) {
+            try {
+                JSONArray parsed = new JSONArray(json);
+                for (int i = 0; i < parsed.length(); i += 1) {
+                    parsed.getJSONObject(i).getInt("x");
+                }
+                spans = parsed;
+            } catch (Exception error) {
+                spans = new JSONArray();
+            }
+            invalidate();
+        }
+
+        void clear() {
+            spans = new JSONArray();
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float scaleX = (float) getWidth() / Math.max(1, host.rendererWidth);
+            float scaleY = (float) getHeight() / Math.max(1, host.rendererHeight);
+            for (int index = 0; index < spans.length(); index += 1) {
+                JSONObject span = spans.optJSONObject(index);
+                if (span == null) {
+                    continue;
+                }
+                String text = span.optString("text", "");
+                if (text.isEmpty()) {
+                    continue;
+                }
+                JSONArray color = span.optJSONArray("color");
+                if (color != null && color.length() == 4) {
+                    paint.setColor(Color.argb(color.optInt(3, 255), color.optInt(0, 0),
+                            color.optInt(1, 0), color.optInt(2, 0)));
+                }
+                float textSize = 7f * Math.max(1, span.optInt("size", 1)) * scaleY;
+                paint.setTextSize(textSize);
+                String align = span.optString("align", "start");
+                paint.setTextAlign("center".equals(align) ? Paint.Align.CENTER
+                        : "end".equals(align) ? Paint.Align.RIGHT : Paint.Align.LEFT);
+                int x = span.optInt("x", 0);
+                int y = span.optInt("y", 0);
+                int w = span.optInt("w", 0);
+                int h = span.optInt("h", 0);
+                float left = x * scaleX;
+                float top = y * scaleY;
+                float right = (x + w) * scaleX;
+                float bottom = (y + h) * scaleY;
+                JSONArray origin = span.optJSONArray("origin");
+                float anchorX;
+                float baseline;
+                if (origin != null && origin.length() == 2) {
+                    anchorX = origin.optInt(0, x) * scaleX;
+                    baseline = origin.optInt(1, y) * scaleY + textSize;
+                } else {
+                    float pad = 2f * scaleX;
+                    anchorX = "center".equals(align) ? (left + right) / 2f
+                            : "end".equals(align) ? right - pad : left + pad;
+                    baseline = top + Math.max(2f * scaleY, (bottom - top - textSize) / 2f)
+                            + textSize;
+                }
+                float lineHeight = textSize + 2f * scaleY;
+                canvas.save();
+                canvas.clipRect(left, top, right, bottom);
+                String[] lines = text.split("\\n", -1);
+                for (int line = 0; line < lines.length; line += 1) {
+                    if (!lines[line].isEmpty()) {
+                        canvas.drawText(lines[line], anchorX,
+                                baseline + line * lineHeight, paint);
+                    }
+                }
+                canvas.restore();
+            }
         }
     }
 
@@ -166,13 +275,26 @@ public final class MainActivity extends Activity {
                 rendererHeight = height;
             }
         }
+        // Preview path: the kernel rasterizes graphics only; all text is
+        // painted by TextLayerView with the host system font.
+        if (renderer != 0) {
+            OpuromNative.opuRendererSuppressText(renderer, true);
+        }
         int status = renderer != 0
                 ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
                         null, pixels, width, height)
-                : OpuromNative.opuFrameFromIrRoute(graphicsIr, stateJson,
-                        null, pixels, width, height);
+                : OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
+                        pixels, width, height);
         if (status != OpuromNative.OK) {
             throw new IllegalStateException("frame render failed with status " + status);
+        }
+        byte[] spanBytes = new byte[65536];
+        int spanCount = OpuromNative.opuTextSpans(graphicsIr, stateJson,
+                width, height, spanBytes);
+        if (spanCount >= 0) {
+            textLayer.setSpans(new String(trim(spanBytes), StandardCharsets.UTF_8));
+        } else {
+            textLayer.clear();
         }
         int[] argb = new int[width * height];
         for (int index = 0; index < argb.length; index += 1) {

@@ -18,7 +18,8 @@
 
 use opurom_core::{Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime,
                   Value as CoreValue};
-use opurom_render::{hit, layout, parse_ir, parse_state_json, Ir, Renderer, StateView, SETTLED_MS};
+use opurom_render::{hit, layout, parse_ir, parse_state_json, text_spans_for, Ir, Renderer,
+                    StateView, SETTLED_MS};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -31,6 +32,15 @@ pub const OPU_ERR_OVERFLOW: i32 = 4;
 pub const OPU_ERR_PANIC: i32 = 5;
 pub const OPU_ERR_IR: i32 = 6;
 pub const OPU_ERR_STATE: i32 = 7;
+
+/* Negative status values for span export, so a count can never be confused
+ * with an error by a caller that only checks the sign. */
+pub const OPU_SPAN_ERR_NULL: i32 = -1;
+pub const OPU_SPAN_ERR_IR: i32 = -2;
+pub const OPU_SPAN_ERR_STATE: i32 = -3;
+pub const OPU_SPAN_ERR_DIMENSION: i32 = -4;
+pub const OPU_SPAN_ERR_OVERFLOW: i32 = -5;
+pub const OPU_SPAN_ERR_PANIC: i32 = -6;
 
 pub const OPU_EVENT_TAP: u32 = 1;
 pub const OPU_EVENT_RESET: u32 = 2;
@@ -649,6 +659,108 @@ pub extern "C" fn opu_tap_node(
     )
 }
 
+/// Writes the deterministic text-span JSON for one IR/state/viewport and
+/// returns the span count. Offsets and sizes are logical pixels, matching the
+/// raster viewport. Negative status values are the OPU_SPAN_ERR_* codes.
+#[no_mangle]
+pub extern "C" fn opu_text_spans(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    width: u32,
+    height: u32,
+    out_json: *mut u8,
+    out_capacity: usize,
+) -> i32 {
+    ffi_guard(
+        || {
+            if out_json.is_null() {
+                return OPU_SPAN_ERR_NULL;
+            }
+            if frame_len(width, height).is_none() {
+                return OPU_SPAN_ERR_DIMENSION;
+            }
+            let (ir, state) = match parse_ir_state(ir_json, ir_len, state_json, state_len) {
+                Ok(inputs) => inputs,
+                Err(OPU_ERR_IR) => return OPU_SPAN_ERR_IR,
+                Err(OPU_ERR_STATE) => return OPU_SPAN_ERR_STATE,
+                Err(_) => return OPU_SPAN_ERR_NULL,
+            };
+            let text = text_spans_for(&ir, &state, width, height);
+            let spans: Vec<JsonValue> = match serde_json::from_str(&text) {
+                Ok(spans) => spans,
+                Err(_) => return OPU_SPAN_ERR_STATE,
+            };
+            let count = spans.len();
+            let bytes = text.as_bytes();
+            if bytes.len() > out_capacity {
+                return OPU_SPAN_ERR_OVERFLOW;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_json, bytes.len()) };
+            count as i32
+        },
+        OPU_SPAN_ERR_PANIC,
+    )
+}
+
+/// Opt-in graphics-only mode for a reusable renderer. Default stays false, so
+/// existing frames are byte-identical until a host turns suppression on.
+#[no_mangle]
+pub extern "C" fn opu_renderer_set_suppress_text(renderer: *mut OpuRenderer, on: i32) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            owned.renderer.set_suppress_text(on != 0);
+            OPU_OK
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+fn frame_suppressed_impl(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> Result<i32, i32> {
+    if out.is_null() {
+        return Err(OPU_ERR_NULL);
+    }
+    let byte_len = frame_len(width, height).ok_or(OPU_ERR_DIMENSION)?;
+    let (ir, state) = parse_ir_state(ir_json, ir_len, state_json, state_len)?;
+    let mut renderer = Renderer::try_new(width, height).map_err(|_| OPU_ERR_DIMENSION)?;
+    renderer.set_suppress_text(true);
+    let pixels = renderer.pixels_at(&ir, &state, SETTLED_MS);
+    Ok(write_pixels(&pixels, out, byte_len))
+}
+
+/// One-shot graphics-only frame for hosts without a reusable renderer.
+#[no_mangle]
+pub extern "C" fn opu_frame_from_ir_suppressed(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || match frame_suppressed_impl(ir_json, ir_len, state_json, state_len, out, width, height) {
+            Ok(status) => status,
+            Err(code) => code,
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,5 +926,41 @@ mod tests {
                          u32::MAX, out1.as_mut_ptr(), out1.len()),
             OPU_ERR_EVENT
         );
+    }
+
+    #[test]
+    fn text_spans_are_deterministic_and_suppression_removes_bitmap_text() {
+        let ir = include_bytes!("../android/app/src/main/assets/calculator.opuir.json");
+        let empty = b"{}";
+        let (width, height) = (400u32, 720u32);
+        let mut first = [0u8; 32768];
+        let mut second = [0u8; 32768];
+        let count = opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                   width, height, first.as_mut_ptr(), first.len());
+        assert!(count > 0, "calculator must export text spans");
+        let other = opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                   width, height, second.as_mut_ptr(), second.len());
+        assert_eq!(count, other);
+        assert_eq!(first, second, "span JSON is byte-identical across runs");
+        let _: JsonValue = serde_json::from_slice(&first[..first.iter()
+            .position(|b| *b == 0).unwrap_or(first.len())]).unwrap();
+        assert_eq!(
+            opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                           width, height, first.as_mut_ptr(), 1),
+            OPU_SPAN_ERR_OVERFLOW
+        );
+        let mut with_text = vec![0u8; (width * height * 4) as usize];
+        let mut graphics = vec![0u8; with_text.len()];
+        assert_eq!(
+            opu_frame_from_ir(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                              with_text.as_mut_ptr(), width, height),
+            OPU_OK
+        );
+        assert_eq!(
+            opu_frame_from_ir_suppressed(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                         graphics.as_mut_ptr(), width, height),
+            OPU_OK
+        );
+        assert_ne!(with_text, graphics, "suppressed frame must not paint bitmap text");
     }
 }

@@ -148,6 +148,31 @@ int32_t opu_tap_node(const uint8_t *ir_json, size_t ir_len,
                      const uint8_t *state_json, size_t state_len,
                      uint32_t node_id, uint8_t *out_json, size_t out_capacity);
 
+/* Negative status codes returned by opu_text_spans. */
+#define OPU_SPAN_ERR_NULL (-1)
+#define OPU_SPAN_ERR_IR (-2)
+#define OPU_SPAN_ERR_STATE (-3)
+#define OPU_SPAN_ERR_DIMENSION (-4)
+#define OPU_SPAN_ERR_OVERFLOW (-5)
+#define OPU_SPAN_ERR_PANIC (-6)
+
+/*
+ * Writes the deterministic text-span JSON for one IR/state/viewport into
+ * out_json and returns the span count (>= 0), or one of the OPU_SPAN_ERR_*
+ * codes. The span rects use the same logical pixels as the frame viewport.
+ */
+int32_t opu_text_spans(const uint8_t *ir_json, size_t ir_len,
+                       const uint8_t *state_json, size_t state_len,
+                       uint32_t width, uint32_t height,
+                       uint8_t *out_json, size_t out_capacity);
+
+/* Opt-in graphics-only raster. Default frames keep their bitmap text. */
+int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
+
+int32_t opu_frame_from_ir_suppressed(const uint8_t *ir_json, size_t ir_len,
+                                     const uint8_t *state_json, size_t state_len,
+                                     uint8_t *out, uint32_t width, uint32_t height);
+
 #ifdef __cplusplus
 }
 #endif

@@ -79,6 +79,17 @@ public final class OpuromNative {
     public static native int opuTapNode(byte[] irJson, byte[] stateJson,
                                         int nodeId, byte[] outJson);
 
+    /** Writes the deterministic text-span JSON; returns span count or a negative error. */
+    public static native int opuTextSpans(byte[] irJson, byte[] stateJson,
+                                          int width, int height, byte[] outJson);
+
+    /** Turns bitmap-text rasterization off for one reusable renderer. */
+    public static native int opuRendererSuppressText(long renderer, boolean on);
+
+    /** One-shot graphics-only frame, with the same viewport contract as the default path. */
+    public static native int opuFrameSuppressed(byte[] irJson, byte[] stateJson,
+                                                byte[] out, int width, int height);
+
     private OpuromNative() {
     }
 

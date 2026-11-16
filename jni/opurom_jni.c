@@ -95,7 +95,7 @@ JNIEXPORT void JNICALL Java_org_opurom_mobile_OpuromNative_opuStateFree(JNIEnv *
  * Every early return releases whatever it pinned, so no pointer survives the call.
  */
 static jint render_ir_arrays(JNIEnv *env, jbyteArray ir, jbyteArray state, jbyteArray out,
-                             jint width, jint height, OpuRenderer *renderer) {
+                             jint width, jint height, OpuRenderer *renderer, int suppress) {
     jbyte *ir_bytes;
     jbyte *state_bytes;
     jbyte *out_bytes;
@@ -137,6 +137,11 @@ static jint render_ir_arrays(JNIEnv *env, jbyteArray ir, jbyteArray state, jbyte
         status = opu_renderer_frame(renderer, (const uint8_t *)ir_bytes, (size_t)ir_len,
                                     (const uint8_t *)state_bytes, (size_t)state_len,
                                     (uint8_t *)out_bytes, (uint32_t)width, (uint32_t)height);
+    } else if (suppress) {
+        status = opu_frame_from_ir_suppressed((const uint8_t *)ir_bytes, (size_t)ir_len,
+                                              (const uint8_t *)state_bytes, (size_t)state_len,
+                                              (uint8_t *)out_bytes, (uint32_t)width,
+                                              (uint32_t)height);
     } else {
         status = opu_frame_from_ir((const uint8_t *)ir_bytes, (size_t)ir_len,
                                    (const uint8_t *)state_bytes, (size_t)state_len,
@@ -157,7 +162,7 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIr(JNIEnv
                                                                            jint width,
                                                                            jint height) {
     (void)clazz;
-    return render_ir_arrays(env, ir, state, out, width, height, NULL);
+    return render_ir_arrays(env, ir, state, out, width, height, NULL, 0);
 }
 
 /*
@@ -345,7 +350,7 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrame(JNIE
         return (jint)OPU_ERR_NULL;
     }
     return render_ir_arrays(env, ir, state, out, width, height,
-                            (OpuRenderer *)(intptr_t)renderer);
+                            (OpuRenderer *)(intptr_t)renderer, 0);
 }
 
 JNIEXPORT void JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFree(JNIEnv *env,
@@ -505,4 +510,58 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTapNode(
     (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
     (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
     return status;
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTextSpans(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jint width, jint height,
+    jbyteArray out) {
+    jbyte *ir_bytes;
+    jbyte *state_bytes;
+    jbyte *out_bytes;
+    jsize ir_len;
+    jsize state_len;
+    jint count;
+
+    (void)clazz;
+    if (width <= 0 || height <= 0) {
+        return (jint)OPU_SPAN_ERR_DIMENSION;
+    }
+    if (out == NULL) {
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    if (pin_ir_state(env, ir, state, &ir_bytes, &state_bytes, &ir_len, &state_len) != OPU_OK) {
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    out_bytes = (*env)->GetByteArrayElements(env, out, NULL);
+    if (out_bytes == NULL) {
+        (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+        (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    count = opu_text_spans((const uint8_t *)ir_bytes, (size_t)ir_len,
+                           (const uint8_t *)state_bytes, (size_t)state_len,
+                           (uint32_t)width, (uint32_t)height,
+                           (uint8_t *)out_bytes, (size_t)(*env)->GetArrayLength(env, out));
+    (*env)->ReleaseByteArrayElements(env, out, out_bytes, count >= 0 ? 0 : JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+    return count;
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSuppressText(
+    JNIEnv *env, jclass clazz, jlong renderer, jboolean on) {
+    (void)env;
+    (void)clazz;
+    if (renderer == 0) {
+        return (jint)OPU_ERR_NULL;
+    }
+    return (jint)opu_renderer_set_suppress_text((OpuRenderer *)(intptr_t)renderer,
+                                                on == JNI_TRUE ? 1 : 0);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameSuppressed(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray out, jint width,
+    jint height) {
+    (void)clazz;
+    return render_ir_arrays(env, ir, state, out, width, height, NULL, 1);
 }
