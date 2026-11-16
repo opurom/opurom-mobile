@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
@@ -51,6 +52,9 @@ public final class MainActivity extends Activity {
     // the native release kernel keeps it within budget; drawBitmap is 1:1.
     private static final int MAX_FRAME_PIXELS = 2400;
     private static final String TOUCH_TAG = "OpuromTouch";
+    // A0 frame pump: caller-owned fixed-step clock, no wall clock, no new opt-in flag.
+    private static final int FRAME_STEP_MS = 16;
+    private static final int ANIM_SETTLED_MS = 4000;
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
@@ -74,6 +78,35 @@ public final class MainActivity extends Activity {
     // renderFrame; read-only afterwards until the next frame.
     private float frameScaleX = 1f;
     private float frameScaleY = 1f;
+    // Opt-in animation state. The pump runs only when the loaded IR declares an
+    // animation property; otherwise renderFrame keeps the exact SETTLED path.
+    private boolean animated;
+    private int elapsedMs;
+    private boolean pumpQueued;
+    private final FramePump framePump = new FramePump(this);
+
+    /** Fixed-step animation clock; a named class keeps d8 dexing simple. */
+    static final class FramePump implements Choreographer.FrameCallback {
+        private final MainActivity host;
+
+        FramePump(MainActivity host) {
+            this.host = host;
+        }
+
+        @Override
+        public void doFrame(long frameTimeNanos) {
+            host.pumpQueued = false;
+            if (!host.animated) {
+                return;
+            }
+            host.elapsedMs = Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
+            host.renderFrame();
+            if (host.elapsedMs < ANIM_SETTLED_MS) {
+                host.pumpQueued = true;
+                Choreographer.getInstance().postFrameCallback(this);
+            }
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +131,7 @@ public final class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         view.post(this::renderFrame);
+        view.post(this::startPump);
     }
 
     /** The only view in the app: draws IR pixels and maps touches back to IR nodes. */
@@ -267,7 +301,11 @@ public final class MainActivity extends Activity {
             return;
         }
         stateJson = trim(out);
+        if (animated) {
+            elapsedMs = 0;
+        }
         renderFrame();
+        startPump();
     }
 
     private static byte[] trim(byte[] data) {
@@ -309,11 +347,17 @@ public final class MainActivity extends Activity {
         if (renderer != 0) {
             OpuromNative.opuRendererSuppressText(renderer, true);
         }
-        int status = renderer != 0
-                ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
-                        null, pixels, width, height)
-                : OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
-                        pixels, width, height);
+        int status;
+        if (renderer != 0 && animated) {
+            status = OpuromNative.opuRendererFrameAt(renderer, graphicsIr, stateJson, null,
+                    elapsedMs, pixels, width, height);
+        } else if (renderer != 0) {
+            status = OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
+                    null, pixels, width, height);
+        } else {
+            status = OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
+                    pixels, width, height);
+        }
         if (status != OpuromNative.OK) {
             throw new IllegalStateException("frame render failed with status " + status);
         }
@@ -341,6 +385,23 @@ public final class MainActivity extends Activity {
     private void applyIr(byte[] ir) {
         graphicsIr = ir;
         stateJson = "{}".getBytes(StandardCharsets.UTF_8);
+        elapsedMs = 0;
+        animated = declaresAnimation(ir);
+    }
+
+    /** Opt-in: an IR carrying a timing property drives the fixed-step frame pump. */
+    private static boolean declaresAnimation(byte[] ir) {
+        String text = new String(ir, StandardCharsets.UTF_8);
+        return text.contains("\"animate\"") || text.contains("\"animClock\"")
+                || text.contains("\"duration\"");
+    }
+
+    private void startPump() {
+        if (!animated || pumpQueued) {
+            return;
+        }
+        pumpQueued = true;
+        Choreographer.getInstance().postFrameCallback(framePump);
     }
 
     /** Reload hook used by the dev CLI; keeps the warm process and state. */
@@ -353,6 +414,7 @@ public final class MainActivity extends Activity {
             byte[] ir = java.nio.file.Files.readAllBytes(file.toPath());
             activity.applyIr(resolveFontMetrics(resolveSystemMode(ir, activity.dark)));
             activity.renderFrame();
+            activity.startPump();
             return true;
         } catch (IOException error) {
             return false;

@@ -73,6 +73,11 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameRoute
     JNIEnv *env, jclass clazz, jlong renderer, jbyteArray ir, jbyteArray state, jbyteArray route,
     jbyteArray out, jint width, jint height);
 
+/* Timed sibling of opuRendererFrameRoute: elapsed_ms drives the animation clock. */
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameAt(
+    JNIEnv *env, jclass clazz, jlong renderer, jbyteArray ir, jbyteArray state, jbyteArray route,
+    jint elapsed_ms, jbyteArray out, jint width, jint height);
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray route, jbyteArray out,
     jint width, jint height);

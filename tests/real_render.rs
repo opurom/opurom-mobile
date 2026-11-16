@@ -8,6 +8,7 @@ use std::ptr;
 use std::time::Instant;
 
 const TODO_IR: &str = include_str!("../android/app/src/main/assets/todo.opuir.json");
+const ANIMATED_IR: &str = include_str!("../android/app/src/main/assets/counter.opuir.json");
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 // The Todo label is wider than 320px at size 20, so state only changes pixels
@@ -500,6 +501,35 @@ fn single_page_ir_ignores_route_and_matches_legacy() {
         0,
         "single-page IR has no initialRoute"
     );
+}
+
+#[test]
+fn timed_frame_at_advances_animation_clock() {
+    // A caller-owned clock must reach the renderer: the same IR/state/viewport
+    // rendered at t=0 and t=400 differs only because elapsed_ms is an input.
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let mut early = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let mut late = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let render_at = |elapsed_ms: i64, out: &mut [u8]| {
+        opu_renderer_frame_at(
+            handle,
+            ANIMATED_IR.as_ptr(),
+            ANIMATED_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            ptr::null(),
+            0,
+            elapsed_ms,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(render_at(0, &mut early), OPU_OK);
+    assert_eq!(render_at(400, &mut late), OPU_OK);
+    assert_ne!(early, late, "t=0 and t=400 must render different pixels");
+    opu_renderer_free(handle);
 }
 
 #[test]

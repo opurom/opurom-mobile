@@ -114,6 +114,18 @@ int32_t opu_renderer_frame_route(OpuRenderer *renderer,
                                  uint8_t *out, uint32_t width, uint32_t height);
 
 /*
+ * Timed variant of opu_renderer_frame_route: renders at a caller-owned elapsed_ms
+ * so a host frame pump can play animations. Same contract and error codes; the
+ * clock is caller-supplied instead of settled. Negative elapsed_ms is clamped to 0.
+ */
+int32_t opu_renderer_frame_at(OpuRenderer *renderer,
+                              const uint8_t *ir_json, size_t ir_len,
+                              const uint8_t *state_json, size_t state_len,
+                              const uint8_t *route, size_t route_len,
+                              int64_t elapsed_ms,
+                              uint8_t *out, uint32_t width, uint32_t height);
+
+/*
  * Writes the IR's initial page key into out (UTF-8, not NUL-terminated) and returns the number of
  * bytes written, or 0 when the IR is single-page, has no initialRoute, or cannot be parsed.
  * out_capacity bounds the write; a key longer than the buffer returns 0.

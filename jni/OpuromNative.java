@@ -127,6 +127,14 @@ public final class OpuromNative {
     public static native int opuRendererFrameRoute(long renderer, byte[] irJson, byte[] stateJson,
                                                    byte[] route, byte[] out, int width, int height);
 
+    /**
+     * Timed sibling of {@link #opuRendererFrameRoute}: elapsedMs is the caller-owned
+     * animation clock in milliseconds; the host frame pump advances it in fixed steps.
+     */
+    public static native int opuRendererFrameAt(long renderer, byte[] irJson, byte[] stateJson,
+                                                byte[] route, int elapsedMs, byte[] out,
+                                                int width, int height);
+
     /** One-shot multi-page render; see {@link #opuRendererFrameRoute}. */
     public static native int opuFrameFromIrRoute(byte[] irJson, byte[] stateJson, byte[] route,
                                                  byte[] out, int width, int height);

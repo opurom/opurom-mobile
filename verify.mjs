@@ -561,6 +561,7 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuRendererFree',
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIr',
       'Java_org_opurom_mobile_OpuromNative_opuRendererFrameRoute',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererFrameAt',
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrRouteAt',
@@ -578,7 +579,7 @@ if (!ndk) {
     const abiSymbols = [
       'opu_state_new', 'opu_dispatch', 'opu_frame', 'opu_state_free',
       'opu_frame_from_ir', 'opu_renderer_new', 'opu_renderer_frame', 'opu_renderer_free',
-      'opu_frame_from_ir_route', 'opu_renderer_frame_route',
+      'opu_frame_from_ir_route', 'opu_renderer_frame_route', 'opu_renderer_frame_at',
       'opu_ir_initial_route', 'opu_ir_route_at',
       'opu_hit_test', 'opu_tap_node',
       'opu_text_spans', 'opu_renderer_set_suppress_text', 'opu_frame_from_ir_suppressed',
