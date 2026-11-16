@@ -38,7 +38,10 @@ public final class MainActivity extends Activity {
             java.util.regex.Pattern.compile("\"fontMetrics\"\\s*:\\s*\"proportional\"");
     private static final java.util.regex.Pattern THEME_OPEN =
             java.util.regex.Pattern.compile("\"theme\"\\s*:\\s*\\{");
-    private static final int MAX_FRAME_PIXELS = 1024;
+    // Render at physical resolution: downscaling then stretching to the view
+    // halves DPI and blurs glyphs/edge AA. Full-res costs more per frame but
+    // the native release kernel keeps it within budget; drawBitmap is 1:1.
+    private static final int MAX_FRAME_PIXELS = 2400;
     private static final String TOUCH_TAG = "OpuromTouch";
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
