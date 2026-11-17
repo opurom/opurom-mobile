@@ -765,3 +765,52 @@ fn frame_at_cache_reuses_ir_and_invalidates_on_route_change() {
     assert_eq!(b, settled_home, "Home frame settles to a stable image");
     opu_renderer_free(handle);
 }
+
+#[test]
+fn repeated_press_on_same_node_keeps_clock_origin() {
+    // A long-press transition re-reports ON for the same node with a newer
+    // tick. That must NOT re-stamp press_start_tick, or the ripple restarts.
+    let ir = include_bytes!("../android/app/src/main/assets/calculator.opuir.json");
+    let empty = b"{}";
+    // find a node with a tap binding
+    let parsed = opurom_render::parse_ir(std::str::from_utf8(ir).unwrap()).unwrap();
+    fn find_tap(n: &opurom_render::Node) -> Option<u32> {
+        if !n.events.is_empty() {
+            return Some(n.id);
+        }
+        n.children.iter().find_map(find_tap)
+    }
+    let node = find_tap(&parsed.tree).expect("fixture needs a tappable node");
+
+    let mut a = opu_renderer_new(WIDTH, HEIGHT);
+    let mut b = opu_renderer_new(WIDTH, HEIGHT);
+    let mut oa = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
+    let mut ob = vec![0u8; oa.len()];
+    let frame = |r: *mut OpuRenderer, out: &mut [u8]| {
+        opu_renderer_frame_at(
+            r,
+            ir.as_ptr(),
+            ir.len(),
+            empty.as_ptr(),
+            empty.len(),
+            std::ptr::null(),
+            0,
+            200,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(opu_renderer_set_press(a, node, 0, -1, -1, 1), OPU_OK);
+    assert_eq!(opu_renderer_set_press(b, node, 0, -1, -1, 1), OPU_OK);
+    // Re-report ON at a much later tick with a moved touch point.
+    assert_eq!(opu_renderer_set_press(b, node, 175, 12, 12, 1), OPU_OK);
+    assert_eq!(frame(a, &mut oa), OPU_OK);
+    assert_eq!(frame(b, &mut ob), OPU_OK);
+    assert_eq!(
+        oa, ob,
+        "reported long-press must not move the ripple origin"
+    );
+    opu_renderer_free(a);
+    opu_renderer_free(b);
+}

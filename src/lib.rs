@@ -1054,10 +1054,19 @@ pub extern "C" fn opu_renderer_set_press(
                 return OPU_ERR_NULL;
             }
             let owned = unsafe { &mut *renderer };
+            // One press gesture owns one clock origin. Re-reporting ON for the
+            // same node (e.g. a long-press transition) must not re-stamp
+            // press_start_tick: that restarts the ripple mid-hold. Keep the
+            // original origin; only the touch position may move.
             owned.press = if on != 0 && node_id != 0 {
+                let start = owned
+                    .press
+                    .as_ref()
+                    .filter(|p| p.node_id == node_id)
+                    .map_or(press_start_tick, |p| p.press_start_tick);
                 Some(PressPhase {
                     node_id,
-                    press_start_tick,
+                    press_start_tick: start,
                     touch: if touch_x >= 0 && touch_y >= 0 {
                         Some((touch_x, touch_y))
                     } else {
