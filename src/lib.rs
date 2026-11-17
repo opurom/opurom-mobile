@@ -85,6 +85,7 @@ pub const OPU_GESTURE_TAP: u32 = 1;
 pub const OPU_GESTURE_DOUBLE_TAP: u32 = 2;
 pub const OPU_GESTURE_LONG_PRESS: u32 = 3;
 pub const OPU_GESTURE_DRAG: u32 = 4;
+pub const OPU_GESTURE_SCALE: u32 = 5;
 
 pub const OPU_MAX_DIMENSION: u32 = 4096;
 pub const OPU_MAX_FRAME_BYTES: usize = 67108864;
@@ -1358,6 +1359,14 @@ fn write_gesture(gesture: Option<Gesture>, node_id: u32, out: *mut OpuGesture) {
         Some(Gesture::DoubleTap) => (OPU_GESTURE_DOUBLE_TAP, 0, 0),
         Some(Gesture::LongPress) => (OPU_GESTURE_LONG_PRESS, 0, 0),
         Some(Gesture::Drag { dx, dy }) => (OPU_GESTURE_DRAG, dx as i32, dy as i32),
+        // Scale has no extra C ABI fields: dx/dy carry focal x/y. The factor
+        // itself is render-internal until a host consumes it.
+        Some(Gesture::Scale {
+            focal_x, focal_y, ..
+        }) => (OPU_GESTURE_SCALE, focal_x as i32, focal_y as i32),
+        // Render keeps adding gesture variants; unhandled ones are a no-op at
+        // this ABI instead of a compile break in the host.
+        Some(_) => (OPU_GESTURE_NONE, 0, 0),
     };
     unsafe {
         *out = OpuGesture {

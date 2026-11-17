@@ -488,6 +488,10 @@ if (!ndk) {
       '-Wl,--whole-archive', staticlib, '-Wl,--no-whole-archive',
       '-Wl,-z,max-page-size=16384',
       '-llog',
+      // The render core uses libm (exp/pow/sincos for scroll physics). Android
+      // needs libm explicitly: without it the link still succeeds and the
+      // failure only shows up as UnsatisfiedLinkError at dlopen.
+      '-lm',
     ], { timeoutMs: 180000 });
     if (!link.ok) {
       fail(`NDK clang failed to link libopurom_mobile.so for ${abi}`,
@@ -600,6 +604,18 @@ if (!ndk) {
     } else {
       fail(`${abi} shared object is missing exported symbols: ${missing.join(', ')}`,
         dynsyms.stdout);
+    }
+
+    // A shared object must depend on libm: the render core imports exp/pow/
+    // sincos. Undefined imports are normal in a .so; the link fails at dlopen
+    // only when no DT_NEEDED library provides them.
+    const dynamic = run('llvm-readelf -d', [ndkReadelf, '-d', soPath], { timeoutMs: 30000 });
+    if (!dynamic.ok) {
+      fail(`llvm-readelf -d failed for ${abi}`, dynamic.stderr);
+    } else if (/Shared library: \[libm\.so\]/.test(dynamic.stdout)) {
+      pass(`${abi} links libm.so for render math imports`);
+    } else {
+      fail(`${abi} shared object is missing DT_NEEDED libm.so`, dynamic.stdout);
     }
 
     // Every PT_LOAD must be 16 KB-aligned so the library loads on a 16 KB-page

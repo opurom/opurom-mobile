@@ -13,6 +13,7 @@ import android.text.TextUtils.TruncateAt;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.SparseIntArray;
 import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
@@ -112,6 +113,9 @@ public final class MainActivity extends Activity {
     // Renderer-owned gesture arena: logical deadline and one gesture result.
     private long gestureDeadline = -1L;
     private final long[] gestureOut = new long[4];
+    // One hit target and one stable native id per live pointer; primary keeps id 0.
+    private final SparseIntArray pointerNodes = new SparseIntArray();
+    private final SparseIntArray pointerIds = new SparseIntArray();
 
     /** Fixed-step animation clock; a named class keeps d8 dexing simple. */
     static final class FramePump implements Choreographer.FrameCallback {
@@ -201,22 +205,36 @@ public final class MainActivity extends Activity {
         @Override
         public boolean onTouchEvent(MotionEvent event) {
             int action = event.getActionMasked();
+            int index = event.getActionIndex();
             if (action == MotionEvent.ACTION_DOWN) {
-                host.onPressDown(event.getX(), event.getY());
+                host.resetPointers();
+                host.onPressDown(event.getX(index), event.getY(index));
+                host.onPointerDown(event, index, 0);
+                return true;
+            }
+            if (action == MotionEvent.ACTION_POINTER_DOWN) {
+                host.onPointerDown(event, index, host.nextPointerId());
                 return true;
             }
             if (action == MotionEvent.ACTION_MOVE) {
-                host.onPointerMove(event.getX(), event.getY());
+                for (int i = 0; i < event.getPointerCount(); i += 1) {
+                    host.onPointerMove(event, i);
+                }
                 return true;
             }
             if (action == MotionEvent.ACTION_UP) {
-                host.onPointerUp(event.getX(), event.getY());
+                host.onPointerUp(event, index);
+                host.cancelRemainingPointers();
                 host.onPressUp(false);
-                host.onTap(event.getX(), event.getY());
+                host.onTap(event.getX(index), event.getY(index));
+                return true;
+            }
+            if (action == MotionEvent.ACTION_POINTER_UP) {
+                host.onPointerUp(event, index);
                 return true;
             }
             if (action == MotionEvent.ACTION_CANCEL) {
-                host.onPointerCancel();
+                host.cancelRemainingPointers();
                 host.onPressUp(true);
                 return true;
             }
@@ -368,7 +386,6 @@ public final class MainActivity extends Activity {
         press.down(node, x, y, elapsedMs);
         Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
         reportPressPhase(press, node != TouchPhase.NO_NODE ? PRESS_DOWN : PRESS_CLEAR, false);
-        reportGesturePointer(OpuromNative.POINTER_DOWN, node, x, y);
     }
 
     /**
@@ -406,32 +423,86 @@ public final class MainActivity extends Activity {
     // Gesture semantics enter the host only through the renderer's deadline
     // and tick result. The long-press flag never re-reports the press phase:
     // that would re-stamp press_start_tick and restart the ripple mid-hold.
-    private void onPointerMove(float screenX, float screenY) {
-        if (press.isPressed()) {
-            reportGesturePointer(OpuromNative.POINTER_MOVE, press.node,
-                    TouchPhase.toCanvas(screenX, frameScaleX),
-                    TouchPhase.toCanvas(screenY, frameScaleY));
+    private void resetPointers() {
+        pointerIds.clear();
+        pointerNodes.clear();
+    }
+
+    private int nextPointerId() {
+        int id = 0;
+        while (pointerIds.indexOfValue(id) >= 0) {
+            id += 1;
+        }
+        return id;
+    }
+
+    /** Hit-tests one pointer in canvas coordinates; 0 means a miss. */
+    private int hitNode(float screenX, float screenY) {
+        if (lastFrame == null || rendererWidth <= 0 || view.getWidth() <= 0
+                || view.getHeight() <= 0) {
+            return 0;
+        }
+        int x = TouchPhase.toCanvas(screenX, frameScaleX);
+        int y = TouchPhase.toCanvas(screenY, frameScaleY);
+        return OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
+                rendererWidth, rendererHeight);
+    }
+
+    private void onPointerDown(MotionEvent event, int index, int nativeId) {
+        int androidId = event.getPointerId(index);
+        int node = hitNode(event.getX(index), event.getY(index));
+        pointerIds.put(androidId, nativeId);
+        pointerNodes.put(androidId, node);
+        reportGesturePointer(OpuromNative.POINTER_DOWN, nativeId, node,
+                TouchPhase.toCanvas(event.getX(index), frameScaleX),
+                TouchPhase.toCanvas(event.getY(index), frameScaleY));
+    }
+
+    private void onPointerMove(MotionEvent event, int index) {
+        int androidId = event.getPointerId(index);
+        int nativeId = pointerIds.get(androidId, -1);
+        if (nativeId < 0) {
+            return;
+        }
+        reportGesturePointer(OpuromNative.POINTER_MOVE, nativeId,
+                pointerNodes.get(androidId, 0),
+                TouchPhase.toCanvas(event.getX(index), frameScaleX),
+                TouchPhase.toCanvas(event.getY(index), frameScaleY));
+    }
+
+    private void onPointerUp(MotionEvent event, int index) {
+        int androidId = event.getPointerId(index);
+        int nativeId = pointerIds.get(androidId, -1);
+        if (nativeId < 0) {
+            return;
+        }
+        reportGesturePointer(OpuromNative.POINTER_UP, nativeId,
+                pointerNodes.get(androidId, 0),
+                TouchPhase.toCanvas(event.getX(index), frameScaleX),
+                TouchPhase.toCanvas(event.getY(index), frameScaleY));
+        pointerIds.delete(androidId);
+        pointerNodes.delete(androidId);
+    }
+
+    private void cancelRemainingPointers() {
+        // CANCEL ignores coordinates in the arena; only the pointer id matters.
+        for (int i = pointerIds.size() - 1; i >= 0; i -= 1) {
+            int androidId = pointerIds.keyAt(i);
+            reportGesturePointer(OpuromNative.POINTER_CANCEL, pointerIds.valueAt(i),
+                    pointerNodes.get(androidId, 0), 0, 0);
+            pointerIds.delete(androidId);
+            pointerNodes.delete(androidId);
         }
     }
 
-    private void onPointerUp(float screenX, float screenY) {
-        reportGesturePointer(OpuromNative.POINTER_UP, press.node,
-                TouchPhase.toCanvas(screenX, frameScaleX),
-                TouchPhase.toCanvas(screenY, frameScaleY));
-    }
-
-    private void onPointerCancel() {
-        reportGesturePointer(OpuromNative.POINTER_CANCEL, press.node, press.x, press.y);
-    }
-
-    private void reportGesturePointer(int kind, int node, int x, int y) {
+    private void reportGesturePointer(int kind, int pointerId, int node, int x, int y) {
         if (renderer == 0) {
             return;
         }
-        int status = OpuromNative.opuRendererPointer(renderer, kind, 0, node,
+        int status = OpuromNative.opuRendererPointer(renderer, kind, pointerId, node,
                 gestureClockMs, x, y, x, y, gestureOut);
         gestureDeadline = OpuromNative.opuRendererNextDeadlineMs(renderer);
-        Log.d(PRESS_TAG, "pointer kind=" + kind + " node=" + node
+        Log.d(PRESS_TAG, "pointer kind=" + kind + " pid=" + pointerId + " node=" + node
                 + " t=" + gestureClockMs + " status=" + status + " deadline=" + gestureDeadline);
         if (gestureDeadline >= 0) {
             startPump();

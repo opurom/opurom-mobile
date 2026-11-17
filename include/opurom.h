@@ -56,13 +56,13 @@ typedef struct {
 typedef enum {
     OPU_GESTURE_NONE = 0, OPU_GESTURE_TAP = 1,
     OPU_GESTURE_DOUBLE_TAP = 2, OPU_GESTURE_LONG_PRESS = 3,
-    OPU_GESTURE_DRAG = 4
+    OPU_GESTURE_DRAG = 4, OPU_GESTURE_SCALE = 5
 } OpuGestureCode;
 
 typedef struct {
     uint32_t code;        /* OpuGestureCode, 0 = none */
     uint32_t node_id;
-    int32_t  dx, dy;      /* drag delta only */
+    int32_t  dx, dy;      /* drag delta; scale focal_x/focal_y */
 } OpuGesture;
 
 #define OPU_EVENT_TAP 1

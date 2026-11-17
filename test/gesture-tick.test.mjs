@@ -51,13 +51,13 @@ test('three ABI functions resolve through Java, JNI, headers and verify', () => 
 
 test('Android feeds logical pointer/tick events from the frame pump, never wall time', () => {
   assert.match(ACTIVITY, /host\.runGestureTicks\(\);/);
-  assert.match(ACTIVITY, /OpuromNative\.opuRendererPointer\(renderer, kind, 0, node,/);
+  assert.match(ACTIVITY, /OpuromNative\.opuRendererPointer\(renderer, kind, pointerId, node,/);
   assert.match(ACTIVITY, /OpuromNative\.opuRendererNextDeadlineMs\(renderer\)/);
   assert.match(ACTIVITY, /OpuromNative\.opuRendererTick\(renderer, tick, gestureOut\)/);
-  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_DOWN, node, x, y\)/);
-  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_MOVE, press\.node,/);
-  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_UP, press\.node,/);
-  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_CANCEL, press\.node,/);
+  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_DOWN, nativeId, node,/);
+  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_MOVE, nativeId,/);
+  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_UP, nativeId,/);
+  assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_CANCEL, pointerIds\.valueAt\(i\),/);
   assert.match(ACTIVITY, /press\.markLongPressed\(tick, LONG_PRESS_MS\)/);
   assert.ok(!/SystemClock\.uptimeMillis/.test(ACTIVITY), 'no wall clock in the host gesture path');
 });

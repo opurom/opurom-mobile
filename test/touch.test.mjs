@@ -31,6 +31,22 @@ test('the host draws only IR pixels and has no Java chrome', () => {
   assert.ok(!/createFromAsset|createFromFile/.test(ACTIVITY), 'no authored font file');
 });
 
+test('every live pointer keeps its own id and hit target', () => {
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_POINTER_DOWN/);
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_POINTER_UP/);
+  assert.match(ACTIVITY, /event\.getActionIndex\(\)/);
+  assert.match(ACTIVITY, /event\.getPointerId\(index\)/);
+  // One native id per pointer, so the arena can tell the pointers apart.
+  assert.match(ACTIVITY, /private final SparseIntArray pointerIds = new SparseIntArray\(\)/);
+  assert.match(ACTIVITY, /private final SparseIntArray pointerNodes = new SparseIntArray\(\)/);
+  assert.match(ACTIVITY, /host\.onPointerDown\(event, index, host\.nextPointerId\(\)\)/);
+  assert.match(ACTIVITY, /pointerIds\.put\(androidId, nativeId\)/);
+  // The pointer id reaches the native ABI, not a hardcoded zero.
+  assert.match(ACTIVITY,
+    /OpuromNative\.opuRendererPointer\(renderer, kind, pointerId, node,/);
+  assert.match(JAVA, /native int opuRendererPointer\(long renderer, int kind, int pointerId,/);
+});
+
 test('touch coordinates flow through hit test into tap dispatch', () => {
   assert.match(ACTIVITY, /public boolean onTouchEvent\(MotionEvent event\)/);
   assert.match(ACTIVITY, /MotionEvent\.ACTION_UP/);
@@ -43,7 +59,7 @@ test('touch coordinates flow through hit test into tap dispatch', () => {
 test('press phase is captured on DOWN and released on UP or CANCEL', () => {
   assert.match(ACTIVITY, /MotionEvent\.ACTION_DOWN/);
   assert.match(ACTIVITY, /MotionEvent\.ACTION_CANCEL/);
-  assert.match(ACTIVITY, /host\.onPressDown\(event\.getX\(\), event\.getY\(\)\)/);
+  assert.match(ACTIVITY, /host\.onPressDown\(event\.getX\(index\), event\.getY\(index\)\)/);
   assert.match(ACTIVITY, /host\.onPressUp\(false\)/);
   assert.match(ACTIVITY, /host\.onPressUp\(true\)/);
   assert.match(ACTIVITY, /private static final int LONG_PRESS_MS = 500/);

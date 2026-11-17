@@ -42,6 +42,7 @@ public final class OpuromNative {
     public static final int GESTURE_DOUBLE_TAP = 2;
     public static final int GESTURE_LONG_PRESS = 3;
     public static final int GESTURE_DRAG = 4;
+    public static final int GESTURE_SCALE = 5;
 
     public static final int EVENT_TAP = 1;
     public static final int EVENT_RESET = 2;
