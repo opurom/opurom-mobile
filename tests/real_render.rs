@@ -556,35 +556,18 @@ fn press_phase_changes_pixels_and_clears_byte_identically() {
     assert_eq!(default_frame(&mut out), OPU_OK);
     let baseline = out.clone();
 
-    // A press 100 ms before the settled tick still paints ripple progress.
-    let mut pressed = false;
-    'find: for y in (8..HEIGHT as i64).step_by(24) {
-        for x in (8..WIDTH as i64).step_by(24) {
-            let node = opu_hit_test(
-                ANIMATED_IR.as_ptr(),
-                ANIMATED_IR.len(),
-                b"{}".as_ptr(),
-                2,
-                x as i32,
-                y as i32,
-                WIDTH,
-                HEIGHT,
-            );
-            if node == 0 {
-                continue;
-            }
-            assert_eq!(
-                opu_renderer_set_press(handle, node, SETTLED_MS - 100, x, y, 1),
-                OPU_OK
-            );
-            assert_eq!(default_frame(&mut out), OPU_OK);
-            if out != baseline {
-                pressed = true;
-                break 'find;
-            }
-        }
-    }
-    assert!(pressed, "an active press must alter the default frame");
+    // Node 11 is a Button in the counter IR. Ink gating paints press visuals
+    // only on ink hosts, so press a known Button instead of an arbitrary hit
+    // result (which may be Text/Container and leave the frame unchanged).
+    assert_eq!(
+        opu_renderer_set_press(handle, 11, SETTLED_MS - 100, -1, -1, 1),
+        OPU_OK
+    );
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    assert_ne!(
+        out, baseline,
+        "an active press must alter the default frame"
+    );
 
     // Clearing through either contract condition restores the exact bytes.
     assert_eq!(
