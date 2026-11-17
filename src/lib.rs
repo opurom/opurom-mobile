@@ -1166,7 +1166,11 @@ mod tests {
         assert_eq!(opu_renderer_set_press(renderer, 7, 400, 5, 6, 2), OPU_OK);
         let p = unsafe { &*renderer }.press.unwrap();
         assert_eq!(p.press_start_tick, 100, "confirm keeps the down origin");
-        assert_eq!(p.confirm_tick, Some(400), "confirm tick is the release tick");
+        assert_eq!(
+            p.confirm_tick,
+            Some(400),
+            "confirm tick is the release tick"
+        );
         assert_eq!(p.touch, Some((5, 6)), "confirm keeps the touch point");
 
         // A confirm for another node leaves the active press untouched.
@@ -1175,7 +1179,10 @@ mod tests {
 
         // Only CLEAR removes the press.
         assert_eq!(opu_renderer_set_press(renderer, 0, 0, 0, 0, 0), OPU_OK);
-        assert!(unsafe { &*renderer }.press.is_none(), "clear removes the press");
+        assert!(
+            unsafe { &*renderer }.press.is_none(),
+            "clear removes the press"
+        );
         opu_renderer_free(renderer);
     }
 

@@ -863,7 +863,11 @@ fn confirm_release_keeps_press_until_cleared() {
         "confirm without a press"
     );
     // DOWN on the Button paints a ripple that alters the frame.
-    assert_ne!(rendered(&[(button, 0, 1)], 200), baseline, "down paints a ripple");
+    assert_ne!(
+        rendered(&[(button, 0, 1)], 200),
+        baseline,
+        "down paints a ripple"
+    );
     // CONFIRM keeps the press alive: at t=200 the confirmed radius is still
     // visible (release at 100), so the frame differs from the unpressed one.
     assert_ne!(
