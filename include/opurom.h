@@ -178,6 +178,17 @@ int32_t opu_text_spans(const uint8_t *ir_json, size_t ir_len,
                        uint32_t width, uint32_t height,
                        uint8_t *out_json, size_t out_capacity);
 
+/*
+ * Route-aware text spans: emits the spans of `route`'s tree on a multi-page
+ * program (NULL/empty route uses the initial route), so a host's system-font
+ * text overlay matches the graphics frame of the active page.
+ */
+int32_t opu_text_spans_route(const uint8_t *ir_json, size_t ir_len,
+                             const uint8_t *state_json, size_t state_len,
+                             const uint8_t *route, size_t route_len,
+                             uint32_t width, uint32_t height,
+                             uint8_t *out_json, size_t out_capacity);
+
 /* Opt-in graphics-only raster. Default frames keep their bitmap text. */
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
 

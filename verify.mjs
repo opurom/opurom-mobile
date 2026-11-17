@@ -574,6 +574,7 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuHitTest',
       'Java_org_opurom_mobile_OpuromNative_opuTapNode',
       'Java_org_opurom_mobile_OpuromNative_opuTextSpans',
+      'Java_org_opurom_mobile_OpuromNative_opuTextSpansRoute',
       'Java_org_opurom_mobile_OpuromNative_opuRendererSuppressText',
       'Java_org_opurom_mobile_OpuromNative_opuFrameSuppressed',
     ];
@@ -583,11 +584,13 @@ if (!ndk) {
       'opu_frame_from_ir_route', 'opu_renderer_frame_route', 'opu_renderer_frame_at',
       'opu_ir_initial_route', 'opu_ir_route_at',
       'opu_hit_test', 'opu_tap_node',
-      'opu_text_spans', 'opu_renderer_set_suppress_text', 'opu_renderer_set_press',
+      'opu_text_spans', 'opu_text_spans_route', 'opu_renderer_set_suppress_text', 'opu_renderer_set_press',
       'opu_frame_from_ir_suppressed',
     ];
+    // Word-boundary match: a prefix symbol (opu_text_spans_route) must not
+    // satisfy its shorter sibling (opu_text_spans) by substring coincidence.
     const missing = [...jniSymbols, ...abiSymbols]
-      .filter((symbol) => !dynsyms.stdout.includes(symbol));
+      .filter((symbol) => !new RegExp(`\\b${symbol}\\b`).test(dynsyms.stdout));
     if (missing.length === 0) {
       pass(`${abi} exports all ${jniSymbols.length} JNI entry points and all ${abiSymbols.length} C ABI symbols`);
     } else {

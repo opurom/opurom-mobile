@@ -25,7 +25,7 @@ test('the host paints system-font text over a graphics-only frame', () => {
   assert.match(ACTIVITY, /setClickable\(false\)/);
   assert.match(ACTIVITY, /OpuromNative\.opuRendererSuppressText\(renderer, true\)/);
   assert.match(ACTIVITY, /OpuromNative\.opuFrameSuppressed\(graphicsIr, stateJson,/);
-  assert.match(ACTIVITY, /OpuromNative\.opuTextSpans\(graphicsIr, stateJson,/);
+  assert.match(ACTIVITY, /OpuromNative\.opuTextSpansRoute\(graphicsIr, stateJson, route,/);
   assert.match(ACTIVITY, /frameScaleX = \(float\) viewWidth \/ width/);
   assert.match(ACTIVITY, /frameScaleY = \(float\) viewHeight \/ height/);
   assert.match(ACTIVITY, /host\.rendererWidth \* host\.frameScaleX/);
@@ -36,6 +36,7 @@ test('the host paints system-font text over a graphics-only frame', () => {
 test('text span and suppress ABIs resolve through Java, C and Rust', () => {
   const pairs = [
     ['opuTextSpans', 'opu_text_spans'],
+    ['opuTextSpansRoute', 'opu_text_spans_route'],
     ['opuFrameSuppressed', 'opu_frame_from_ir_suppressed'],
     ['opuRendererSuppressText', 'opu_renderer_set_suppress_text'],
   ];

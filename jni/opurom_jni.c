@@ -647,6 +647,61 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTextSpans(
     return count;
 }
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuTextSpansRoute(
+    JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray route,
+    jint width, jint height, jbyteArray out) {
+    jbyte *ir_bytes = NULL;
+    jbyte *state_bytes = NULL;
+    jbyte *route_bytes = NULL;
+    jbyte *out_bytes = NULL;
+    jsize ir_len;
+    jsize state_len;
+    jsize route_len = 0;
+    const uint8_t *route_ptr = NULL;
+    jint count;
+
+    (void)clazz;
+    if (width <= 0 || height <= 0 || out == NULL) {
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    if (pin_ir_state(env, ir, state, &ir_bytes, &state_bytes, &ir_len, &state_len) != OPU_OK) {
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    if (route != NULL) {
+        route_len = (*env)->GetArrayLength(env, route);
+        if (route_len > 0) {
+            route_bytes = (*env)->GetByteArrayElements(env, route, NULL);
+            if (route_bytes == NULL) {
+                (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+                (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+                return (jint)OPU_SPAN_ERR_NULL;
+            }
+            route_ptr = (const uint8_t *)route_bytes;
+        }
+    }
+    out_bytes = (*env)->GetByteArrayElements(env, out, NULL);
+    if (out_bytes == NULL) {
+        if (route_bytes != NULL) {
+            (*env)->ReleaseByteArrayElements(env, route, route_bytes, JNI_ABORT);
+        }
+        (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+        (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+        return (jint)OPU_SPAN_ERR_NULL;
+    }
+    count = opu_text_spans_route((const uint8_t *)ir_bytes, (size_t)ir_len,
+                                 (const uint8_t *)state_bytes, (size_t)state_len,
+                                 route_ptr, (size_t)route_len,
+                                 (uint32_t)width, (uint32_t)height,
+                                 (uint8_t *)out_bytes, (size_t)(*env)->GetArrayLength(env, out));
+    (*env)->ReleaseByteArrayElements(env, out, out_bytes, count >= 0 ? 0 : JNI_ABORT);
+    if (route_bytes != NULL) {
+        (*env)->ReleaseByteArrayElements(env, route, route_bytes, JNI_ABORT);
+    }
+    (*env)->ReleaseByteArrayElements(env, state, state_bytes, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, ir, ir_bytes, JNI_ABORT);
+    return count;
+}
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSuppressText(
     JNIEnv *env, jclass clazz, jlong renderer, jboolean on) {
     (void)env;

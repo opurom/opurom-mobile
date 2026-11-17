@@ -686,3 +686,43 @@ fn tap_forwards_reserved_nav_signal_to_host() {
         .keys()
         .all(|k| !k.starts_with('@') || k == "@nav"));
 }
+
+#[test]
+fn text_spans_route_matches_the_selected_page() {
+    // The system-font overlay must follow the active route, not always the
+    // initial page: Home shows "Home", Detail shows "Detail page".
+    let empty = b"{}";
+    let home = route_text_spans(TWO_ROUTE_IR, "{}", "Home");
+    let detail = route_text_spans(TWO_ROUTE_IR, "{}", "Detail");
+    assert_ne!(
+        home, detail,
+        "different routes must produce different text spans"
+    );
+    assert!(
+        home.contains("Home"),
+        "Home spans carry the Home label: {home}"
+    );
+    assert!(
+        detail.contains("Detail page"),
+        "Detail spans carry Detail: {detail}"
+    );
+}
+
+fn route_text_spans(ir: &str, state: &str, route: &str) -> String {
+    let mut out = [0u8; 65536];
+    let n = opu_text_spans_route(
+        ir.as_ptr(),
+        ir.len(),
+        state.as_ptr(),
+        state.len(),
+        route.as_ptr(),
+        route.len(),
+        WIDTH,
+        HEIGHT,
+        out.as_mut_ptr(),
+        out.len(),
+    );
+    assert!(n >= 0, "opu_text_spans_route failed with {n}");
+    let len = out.iter().position(|b| *b == 0).unwrap_or(out.len());
+    String::from_utf8(out[..len].to_vec()).unwrap()
+}

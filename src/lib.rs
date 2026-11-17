@@ -746,11 +746,12 @@ pub extern "C" fn opu_tap_node(
 /// returns the span count. Offsets and sizes are logical pixels, matching the
 /// raster viewport. Negative status values are the OPU_SPAN_ERR_* codes.
 #[no_mangle]
-pub extern "C" fn opu_text_spans(
+fn text_spans_impl(
     ir_json: *const u8,
     ir_len: usize,
     state_json: *const u8,
     state_len: usize,
+    route: Option<&str>,
     width: u32,
     height: u32,
     out_json: *mut u8,
@@ -770,7 +771,11 @@ pub extern "C" fn opu_text_spans(
                 Err(OPU_ERR_STATE) => return OPU_SPAN_ERR_STATE,
                 Err(_) => return OPU_SPAN_ERR_NULL,
             };
-            let text = text_spans_for(&ir, &state, width, height);
+            let active = match route_ir(&ir, route) {
+                Ok(active) => active,
+                Err(_) => return OPU_SPAN_ERR_IR,
+            };
+            let text = text_spans_for(&active, &state, width, height);
             let spans: Vec<JsonValue> = match serde_json::from_str(&text) {
                 Ok(spans) => spans,
                 Err(_) => return OPU_SPAN_ERR_STATE,
@@ -784,6 +789,62 @@ pub extern "C" fn opu_text_spans(
             count as i32
         },
         OPU_SPAN_ERR_PANIC,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn opu_text_spans(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    width: u32,
+    height: u32,
+    out_json: *mut u8,
+    out_capacity: usize,
+) -> i32 {
+    text_spans_impl(
+        ir_json,
+        ir_len,
+        state_json,
+        state_len,
+        None,
+        width,
+        height,
+        out_json,
+        out_capacity,
+    )
+}
+
+/// Route-aware text spans: emits the system-font spans of `route`'s tree so
+/// the host text overlay matches the graphics frame on multi-page programs.
+#[no_mangle]
+pub extern "C" fn opu_text_spans_route(
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    route: *const u8,
+    route_len: usize,
+    width: u32,
+    height: u32,
+    out_json: *mut u8,
+    out_capacity: usize,
+) -> i32 {
+    let route = match route_str(route, route_len) {
+        Ok(route) => route,
+        Err(_) => return OPU_SPAN_ERR_IR,
+    };
+    text_spans_impl(
+        ir_json,
+        ir_len,
+        state_json,
+        state_len,
+        route,
+        width,
+        height,
+        out_json,
+        out_capacity,
     )
 }
 

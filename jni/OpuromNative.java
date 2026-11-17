@@ -83,6 +83,10 @@ public final class OpuromNative {
     public static native int opuTextSpans(byte[] irJson, byte[] stateJson,
                                           int width, int height, byte[] outJson);
 
+    /** Route-aware text spans: the text overlay of {@code route}'s tree. */
+    public static native int opuTextSpansRoute(byte[] irJson, byte[] stateJson, byte[] route,
+                                               int width, int height, byte[] outJson);
+
     /** Turns bitmap-text rasterization off for one reusable renderer. */
     public static native int opuRendererSuppressText(long renderer, boolean on);
 

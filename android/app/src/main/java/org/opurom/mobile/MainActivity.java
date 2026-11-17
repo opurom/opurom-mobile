@@ -543,7 +543,7 @@ public final class MainActivity extends Activity {
             throw new IllegalStateException("frame render failed with status " + status);
         }
         byte[] spanBytes = new byte[65536];
-        int spanCount = OpuromNative.opuTextSpans(graphicsIr, stateJson,
+        int spanCount = OpuromNative.opuTextSpansRoute(graphicsIr, stateJson, route,
                 width, height, spanBytes);
         if (spanCount >= 0) {
             textLayer.setSpans(new String(trim(spanBytes), StandardCharsets.UTF_8));
