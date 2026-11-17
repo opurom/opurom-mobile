@@ -767,23 +767,16 @@ fn frame_at_cache_reuses_ir_and_invalidates_on_route_change() {
 }
 
 #[test]
-fn repeated_press_on_same_node_keeps_clock_origin() {
-    // A long-press transition re-reports ON for the same node with a newer
-    // tick. That must NOT re-stamp press_start_tick, or the ripple restarts.
-    let ir = include_bytes!("../android/app/src/main/assets/calculator.opuir.json");
+fn repeated_press_on_same_node_restarts_clock() {
+    // A new DOWN on the same Button opens a fresh ripple clock. The old
+    // idempotency kept a stale origin and froze the ripple at max radius when
+    // the user pressed a new position right after a release (round-2 S1).
+    let ir = ANIMATED_IR.as_bytes();
     let empty = b"{}";
-    // find a node with a tap binding
-    let parsed = opurom_render::parse_ir(std::str::from_utf8(ir).unwrap()).unwrap();
-    fn find_tap(n: &opurom_render::Node) -> Option<u32> {
-        if !n.events.is_empty() {
-            return Some(n.id);
-        }
-        n.children.iter().find_map(find_tap)
-    }
-    let node = find_tap(&parsed.tree).expect("fixture needs a tappable node");
+    let node = 11u32; // Button in counter IR; ink gating paints its ripple.
 
-    let mut a = opu_renderer_new(WIDTH, HEIGHT);
-    let mut b = opu_renderer_new(WIDTH, HEIGHT);
+    let a = opu_renderer_new(WIDTH, HEIGHT);
+    let b = opu_renderer_new(WIDTH, HEIGHT);
     let mut oa = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
     let mut ob = vec![0u8; oa.len()];
     let frame = |r: *mut OpuRenderer, out: &mut [u8]| {
@@ -795,21 +788,23 @@ fn repeated_press_on_same_node_keeps_clock_origin() {
             empty.len(),
             std::ptr::null(),
             0,
-            200,
+            1000,
             out.as_mut_ptr(),
             WIDTH,
             HEIGHT,
         )
     };
+    // a: one DOWN at 0, observed at t=1000 -> ripple near max radius.
     assert_eq!(opu_renderer_set_press(a, node, 0, -1, -1, 1), OPU_OK);
+    // b: DOWN at 0, then a genuinely new DOWN at 900. At t=1000 the fresh
+    // ripple is still near its start; old idempotency would make b equal a.
     assert_eq!(opu_renderer_set_press(b, node, 0, -1, -1, 1), OPU_OK);
-    // Re-report ON at a much later tick with a moved touch point.
-    assert_eq!(opu_renderer_set_press(b, node, 175, 12, 12, 1), OPU_OK);
+    assert_eq!(opu_renderer_set_press(b, node, 900, 12, 12, 1), OPU_OK);
     assert_eq!(frame(a, &mut oa), OPU_OK);
     assert_eq!(frame(b, &mut ob), OPU_OK);
-    assert_eq!(
+    assert_ne!(
         oa, ob,
-        "reported long-press must not move the ripple origin"
+        "a new DOWN must restart the ripple clock instead of keeping the old one"
     );
     opu_renderer_free(a);
     opu_renderer_free(b);

@@ -1067,30 +1067,22 @@ pub extern "C" fn opu_renderer_set_press(
                         press.confirm_tick = Some(press_start_tick);
                     }
                 }
+            } else if on != 0 && node_id != 0 {
+                // Every DOWN is a new gesture and opens a fresh ripple clock.
+                // A previous press (even mid-confirm) is replaced: its old down
+                // tick would make the next ripple start at max radius.
+                owned.press = Some(PressPhase {
+                    node_id,
+                    press_start_tick,
+                    touch: if touch_x >= 0 && touch_y >= 0 {
+                        Some((touch_x, touch_y))
+                    } else {
+                        None
+                    },
+                    confirm_tick: None,
+                });
             } else {
-                // One press gesture owns one clock origin. Re-reporting ON for
-                // the same node (e.g. a long-press transition) must not re-stamp
-                // press_start_tick: that restarts the ripple mid-hold. Keep the
-                // original origin; only the touch position may move.
-                owned.press = if on != 0 && node_id != 0 {
-                    let start = owned
-                        .press
-                        .as_ref()
-                        .filter(|p| p.node_id == node_id)
-                        .map_or(press_start_tick, |p| p.press_start_tick);
-                    Some(PressPhase {
-                        node_id,
-                        press_start_tick: start,
-                        touch: if touch_x >= 0 && touch_y >= 0 {
-                            Some((touch_x, touch_y))
-                        } else {
-                            None
-                        },
-                        confirm_tick: None,
-                    })
-                } else {
-                    None
-                };
+                owned.press = None;
             }
             OPU_OK
         },
@@ -1143,7 +1135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn set_press_confirm_records_tick_and_keeps_down_origin() {
+    fn set_press_new_down_restarts_clock_and_confirm_records_tick() {
         let renderer = opu_renderer_new(32, 32);
         assert!(!renderer.is_null());
 
@@ -1155,27 +1147,38 @@ mod tests {
         assert_eq!(p.confirm_tick, None);
         assert_eq!(p.touch, Some((3, 4)));
 
-        // A repeated DOWN on the same node is idempotent on the down origin.
+        // A new DOWN re-stamps the clock even on the same node. A previous
+        // press mid-confirm must not leak its old origin into the new ripple.
         assert_eq!(opu_renderer_set_press(renderer, 7, 900, 5, 6, 1), OPU_OK);
         let p = unsafe { &*renderer }.press.unwrap();
-        assert_eq!(p.press_start_tick, 100, "down origin must not move");
-        assert_eq!(p.touch, Some((5, 6)), "touch may follow the finger");
+        assert_eq!(p.press_start_tick, 900, "new down opens a fresh clock");
+        assert_eq!(p.touch, Some((5, 6)), "touch follows the finger");
         assert_eq!(p.confirm_tick, None);
 
         // CONFIRM stamps only the confirm tick; the press stays live.
-        assert_eq!(opu_renderer_set_press(renderer, 7, 400, 5, 6, 2), OPU_OK);
+        assert_eq!(opu_renderer_set_press(renderer, 7, 1200, 5, 6, 2), OPU_OK);
         let p = unsafe { &*renderer }.press.unwrap();
-        assert_eq!(p.press_start_tick, 100, "confirm keeps the down origin");
+        assert_eq!(p.press_start_tick, 900, "confirm keeps the down origin");
         assert_eq!(
             p.confirm_tick,
-            Some(400),
+            Some(1200),
             "confirm tick is the release tick"
         );
         assert_eq!(p.touch, Some((5, 6)), "confirm keeps the touch point");
 
+        // A new DOWN during the fade discards the confirm and restarts cleanly.
+        assert_eq!(opu_renderer_set_press(renderer, 7, 1300, 8, 9, 1), OPU_OK);
+        let p = unsafe { &*renderer }.press.unwrap();
+        assert_eq!(
+            p.press_start_tick, 1300,
+            "down during fade resets the clock"
+        );
+        assert_eq!(p.confirm_tick, None, "down during fade clears confirm");
+        assert_eq!(p.touch, Some((8, 9)));
+
         // A confirm for another node leaves the active press untouched.
         assert_eq!(opu_renderer_set_press(renderer, 8, 500, 1, 1, 2), OPU_OK);
-        assert_eq!(unsafe { &*renderer }.press.unwrap().confirm_tick, Some(400));
+        assert_eq!(unsafe { &*renderer }.press.unwrap().confirm_tick, None);
 
         // Only CLEAR removes the press.
         assert_eq!(opu_renderer_set_press(renderer, 0, 0, 0, 0, 0), OPU_OK);
