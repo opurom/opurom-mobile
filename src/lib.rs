@@ -26,6 +26,7 @@ use opurom_render::{
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Mutex, OnceLock};
 
 pub const OPU_OK: i32 = 0;
 pub const OPU_ERR_NULL: i32 = 1;
@@ -191,6 +192,35 @@ fn ir_content_hash(bytes: &[u8]) -> u64 {
     hash
 }
 
+/// O(1) content fingerprint for large IR blobs: length plus FNV over the head,
+/// tail and a few interior windows. A cached entry also stores the sampled
+/// bytes and verifies them on hit, so a collision can never serve wrong spans.
+fn ir_fingerprint(bytes: &[u8]) -> ([u64; 3], Vec<u8>) {
+    fn fnv(seed: u64, bytes: &[u8]) -> u64 {
+        let mut h = seed;
+        for &b in bytes {
+            h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
+        }
+        h
+    }
+    const W: usize = 64;
+    let n = bytes.len();
+    let mut sample = Vec::with_capacity(W * 4);
+    let mut push_window = |start: usize| {
+        let end = (start + W).min(n);
+        sample.extend_from_slice(&bytes[start..end]);
+    };
+    push_window(0);
+    push_window(n.saturating_sub(W));
+    push_window(n / 2);
+    let fp = [
+        n as u64,
+        fnv(0xcbf2_9ce4_8422_2325, &sample[..W.min(sample.len())]),
+        fnv(0x9e37_79b9_7f4a_7c15, &sample[W.min(sample.len())..]),
+    ];
+    (fp, sample)
+}
+
 /// Opaque reusable renderer. C callers see only an incomplete struct type.
 #[repr(C)]
 pub struct OpuRenderer {
@@ -201,7 +231,7 @@ pub struct OpuRenderer {
     press: Option<PressPhase>,
     /// Last parsed IR keyed by (content hash, route). Press frames reuse it;
     /// a changed IR or route invalidates it. State is never cached (small).
-    ir_cache: Option<(u64, Option<String>, Ir)>,
+    ir_cache: Option<([u64; 3], Option<String>, Ir, Vec<u8>)>,
 }
 
 impl OpuRenderer {
@@ -216,15 +246,18 @@ impl OpuRenderer {
         route: Option<&str>,
     ) -> Result<(), i32> {
         let bytes = json_str(ir_json, ir_len, OPU_ERR_IR)?;
-        let key = ir_content_hash(bytes.as_bytes());
-        if let Some((cached_key, cached_route, _)) = &self.ir_cache {
-            if *cached_key == key && cached_route.as_deref() == route {
+        let (fp, sample) = ir_fingerprint(bytes.as_bytes());
+        if let Some((cached_fp, cached_route, _, cached_sample)) = &self.ir_cache {
+            if *cached_fp == fp
+                && cached_route.as_deref() == route
+                && cached_sample.as_slice() == sample.as_slice()
+            {
                 return Ok(());
             }
         }
         let parsed = parse_ir(bytes).map_err(|_| OPU_ERR_IR)?;
         let active = route_ir(&parsed, route)?.into_owned();
-        self.ir_cache = Some((key, route.map(str::to_owned), active));
+        self.ir_cache = Some((fp, route.map(str::to_owned), active, sample));
         Ok(())
     }
 
@@ -561,7 +594,7 @@ pub extern "C" fn opu_renderer_frame_at(
             let height_c = owned.height;
             // Disjoint field borrows: active IR from the cache, renderer mutable.
             let active = match &owned.ir_cache {
-                Some((_, _, ir)) => ir,
+                Some((_, _, ir, _)) => ir,
                 None => return OPU_ERR_IR,
             };
             let state = match parse_state_json(active, state_json) {
@@ -824,9 +857,22 @@ pub extern "C" fn opu_tap_node(
 }
 
 /// Writes the deterministic text-span JSON for one IR/state/viewport and
-/// returns the span count. Offsets and sizes are logical pixels, matching the
-/// raster viewport. Negative status values are the OPU_SPAN_ERR_* codes.
-#[no_mangle]
+/// Cache of the last text-span JSON documents, keyed by (IR hash, state hash,
+/// route, viewport). The host calls this every frame; without a cache each
+/// call re-parses a multi-megabyte IR just to recompute identical spans.
+const SPAN_CACHE_CAPACITY: usize = 8;
+type SpanKey = ([u64; 3], u64, String, u32, u32);
+static SPAN_CACHE: OnceLock<Mutex<std::collections::HashMap<SpanKey, (Vec<u8>, i32, Vec<u8>)>>> =
+    OnceLock::new();
+
+fn span_cache(
+) -> std::sync::MutexGuard<'static, std::collections::HashMap<SpanKey, (Vec<u8>, i32, Vec<u8>)>> {
+    SPAN_CACHE
+        .get_or_init(|| Mutex::new(std::collections::HashMap::new()))
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
+
 fn text_spans_impl(
     ir_json: *const u8,
     ir_len: usize,
@@ -916,7 +962,32 @@ pub extern "C" fn opu_text_spans_route(
         Ok(route) => route,
         Err(_) => return OPU_SPAN_ERR_IR,
     };
-    text_spans_impl(
+    let ir_bytes = match json_str(ir_json, ir_len, OPU_SPAN_ERR_IR) {
+        Ok(s) => s.as_bytes(),
+        Err(code) => return code,
+    };
+    let state_bytes = match json_str(state_json, state_len, OPU_SPAN_ERR_STATE) {
+        Ok(s) => s.as_bytes(),
+        Err(code) => return code,
+    };
+    let (fp, sample) = ir_fingerprint(ir_bytes);
+    let key: SpanKey = (
+        fp,
+        ir_content_hash(state_bytes),
+        route.unwrap_or("").to_owned(),
+        width,
+        height,
+    );
+    if let Some((cached, count, cached_sample)) = span_cache().get(&key) {
+        if cached_sample.as_slice() == sample.as_slice() {
+            if cached.len() > out_capacity {
+                return OPU_SPAN_ERR_OVERFLOW;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(cached.as_ptr(), out_json, cached.len()) };
+            return *count;
+        }
+    }
+    let count = text_spans_impl(
         ir_json,
         ir_len,
         state_json,
@@ -926,7 +997,24 @@ pub extern "C" fn opu_text_spans_route(
         height,
         out_json,
         out_capacity,
-    )
+    );
+    if count >= 0 {
+        let len = {
+            let data = unsafe { std::slice::from_raw_parts(out_json, out_capacity) };
+            data.iter().position(|b| *b == 0).unwrap_or(out_capacity)
+        };
+        let stored = unsafe { std::slice::from_raw_parts(out_json, len) }.to_vec();
+        let mut cache = span_cache();
+        if cache.len() >= SPAN_CACHE_CAPACITY {
+            // Drop one arbitrary entry; keys are content hashes so any eviction
+            // is deterministic for a given call sequence.
+            if let Some(old) = cache.keys().next().cloned() {
+                cache.remove(&old);
+            }
+        }
+        cache.insert(key, (stored, count, sample));
+    }
+    count
 }
 
 /// Opt-in graphics-only mode for a reusable renderer. Default stays false, so
