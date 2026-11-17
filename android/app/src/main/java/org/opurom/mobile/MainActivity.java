@@ -382,11 +382,15 @@ public final class MainActivity extends Activity {
     }
 
     private void onLongPressTimeout() {
+        // Long-press is a gesture-semantics flag only. It must NOT re-report the
+        // press phase: doing so re-stamps press_start_tick with the current
+        // animation clock and restarts the ripple from zero (visible as a
+        // second splash mid-hold). The renderer press opens once on DOWN and
+        // closes once on UP/CANCEL; the clock origin never moves in between.
         if (press.isPressed()
                 && press.markLongPressed(SystemClock.uptimeMillis(),
                         ViewConfiguration.getLongPressTimeout())) {
             Log.d(PRESS_TAG, "long node=" + press.node);
-            reportPressPhase(press, true, true);
         }
     }
 
