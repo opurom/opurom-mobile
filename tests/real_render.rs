@@ -680,5 +680,9 @@ fn tap_forwards_reserved_nav_signal_to_host() {
     let text = std::str::from_utf8(&out[..len]).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
     assert_eq!(parsed["@nav"], serde_json::Value::String("Detail".into()));
-    assert!(parsed.as_object().unwrap().keys().all(|k| !k.starts_with('@') || k == "@nav"));
+    assert!(parsed
+        .as_object()
+        .unwrap()
+        .keys()
+        .all(|k| !k.starts_with('@') || k == "@nav"));
 }
