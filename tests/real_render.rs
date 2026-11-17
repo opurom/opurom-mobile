@@ -595,10 +595,7 @@ fn press_phase_changes_pixels_and_clears_byte_identically() {
     assert_eq!(default_frame(&mut out), OPU_OK);
     assert_eq!(out, baseline, "cleared press restores the default frame");
     opu_renderer_set_press(handle, 1, SETTLED_MS - 100, 1, 1, 1);
-    assert_eq!(
-        opu_renderer_set_press(handle, 1, 0, 1, 1, 0),
-        OPU_OK
-    );
+    assert_eq!(opu_renderer_set_press(handle, 1, 0, 1, 1, 0), OPU_OK);
     assert_eq!(default_frame(&mut out), OPU_OK);
     assert_eq!(out, baseline, "on=0 restores the default frame");
     assert_eq!(

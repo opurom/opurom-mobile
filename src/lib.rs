@@ -16,10 +16,13 @@
 //! Panics inside Rust code are caught and returned as `OPU_ERR_PANIC`; an abort or an invalid
 //! pointer remains undefined behavior. This ABI is not thread-safe for one state: serialize calls.
 
-use opurom_core::{Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime,
-                  Value as CoreValue};
-use opurom_render::{hit, layout, layout_at, parse_ir, parse_state_json, text_spans_for, Frame,
-                    Ir, PressPhase, Renderer, StateView, SETTLED_MS};
+use opurom_core::{
+    Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime, Value as CoreValue,
+};
+use opurom_render::{
+    hit, layout, layout_at, parse_ir, parse_state_json, text_spans_for, Frame, Ir, PressPhase,
+    Renderer, StateView, SETTLED_MS,
+};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -192,7 +195,9 @@ impl OpuRenderer {
     /// press this is the exact incremental call, so default frames are unchanged.
     fn render_at(&mut self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Frame {
         match self.press_phase(ir, state, elapsed_ms) {
-            Some(p) => self.renderer.render_with_press(ir, state, elapsed_ms, Some(&p)),
+            Some(p) => self
+                .renderer
+                .render_with_press(ir, state, elapsed_ms, Some(&p)),
             None => self.renderer.render_incremental_at(ir, state, elapsed_ms),
         }
     }
@@ -359,8 +364,7 @@ pub extern "C" fn opu_renderer_frame(
                     Ok(inputs) => inputs,
                     Err(code) => return code,
                 };
-            let frame = owned
-                .render_at(&ir, &state, SETTLED_MS);
+            let frame = owned.render_at(&ir, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
@@ -459,8 +463,7 @@ pub extern "C" fn opu_renderer_frame_route(
                 Ok(active) => active,
                 Err(code) => return code,
             };
-            let frame = owned
-                .render_at(&active, &state, SETTLED_MS);
+            let frame = owned.render_at(&active, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
@@ -503,8 +506,7 @@ pub extern "C" fn opu_renderer_frame_at(
                 Ok(active) => active,
                 Err(code) => return code,
             };
-            let frame = owned
-                .render_at(&active, &state, elapsed_ms.max(0));
+            let frame = owned.render_at(&active, &state, elapsed_ms.max(0));
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
@@ -645,10 +647,7 @@ fn core_value(value: &JsonValue) -> Result<CoreValue, i32> {
     match value {
         JsonValue::String(text) => Ok(CoreValue::Str(text.clone())),
         JsonValue::Bool(flag) => Ok(CoreValue::Bool(*flag)),
-        JsonValue::Number(number) => number
-            .as_i64()
-            .map(CoreValue::Int)
-            .ok_or(OPU_ERR_STATE),
+        JsonValue::Number(number) => number.as_i64().map(CoreValue::Int).ok_or(OPU_ERR_STATE),
         JsonValue::Array(items) => items
             .iter()
             .map(|item| item.as_str().map(str::to_owned).ok_or(OPU_ERR_STATE))
@@ -694,8 +693,7 @@ fn tap_node_impl(
         let value = serde_json::to_value(patch.value).map_err(|_| OPU_ERR_STATE)?;
         state.insert(patch.name, value);
     }
-    let text =
-        serde_json::to_string(&JsonValue::Object(state)).map_err(|_| OPU_ERR_STATE)?;
+    let text = serde_json::to_string(&JsonValue::Object(state)).map_err(|_| OPU_ERR_STATE)?;
     let bytes = text.as_bytes();
     if bytes.len() > out_capacity {
         return Err(OPU_ERR_OVERFLOW);
@@ -719,8 +717,15 @@ pub extern "C" fn opu_tap_node(
     out_capacity: usize,
 ) -> i32 {
     ffi_guard(
-        || match tap_node_impl(ir_json, ir_len, state_json, state_len, node_id,
-                               out_json, out_capacity) {
+        || match tap_node_impl(
+            ir_json,
+            ir_len,
+            state_json,
+            state_len,
+            node_id,
+            out_json,
+            out_capacity,
+        ) {
             Ok(status) => status,
             Err(code) => code,
         },
@@ -991,8 +996,16 @@ mod tests {
         let mut unique = Vec::new();
         for y in (0..height as i32).step_by(20) {
             for x in (0..width as i32).step_by(20) {
-                let id = opu_hit_test(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                      x, y, width, height);
+                let id = opu_hit_test(
+                    ir.as_ptr(),
+                    ir.len(),
+                    empty.as_ptr(),
+                    empty.len(),
+                    x,
+                    y,
+                    width,
+                    height,
+                );
                 if id != 0 && !unique.contains(&id) {
                     unique.push(id);
                 }
@@ -1002,25 +1015,49 @@ mod tests {
         let mut tappable = Vec::new();
         let mut scratch = [0u8; 8192];
         for id in unique {
-            let status = opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                      id, scratch.as_mut_ptr(), scratch.len());
+            let status = opu_tap_node(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                id,
+                scratch.as_mut_ptr(),
+                scratch.len(),
+            );
             if status == OPU_OK && !tappable.contains(&id) {
                 tappable.push(id);
             }
         }
-        assert!(tappable.len() >= 2, "expected at least two nodes with tap bindings");
+        assert!(
+            tappable.len() >= 2,
+            "expected at least two nodes with tap bindings"
+        );
         let first = tappable[0];
         let second = tappable[1];
         let mut out1 = [0u8; 8192];
         let mut out2 = [0u8; 8192];
         assert_eq!(
-            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                         first, out1.as_mut_ptr(), out1.len()),
+            opu_tap_node(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                first,
+                out1.as_mut_ptr(),
+                out1.len()
+            ),
             OPU_OK
         );
         assert_eq!(
-            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                         second, out2.as_mut_ptr(), out2.len()),
+            opu_tap_node(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                second,
+                out2.as_mut_ptr(),
+                out2.len()
+            ),
             OPU_OK
         );
         let len1 = out1.iter().position(|b| *b == 0).unwrap_or(out1.len());
@@ -1030,8 +1067,15 @@ mod tests {
         let _: JsonValue = serde_json::from_str(a).unwrap();
         assert_ne!(a, b, "different digit nodes must produce different state");
         assert_eq!(
-            opu_tap_node(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                         u32::MAX, out1.as_mut_ptr(), out1.len()),
+            opu_tap_node(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                u32::MAX,
+                out1.as_mut_ptr(),
+                out1.len()
+            ),
             OPU_ERR_EVENT
         );
     }
@@ -1043,33 +1087,76 @@ mod tests {
         let (width, height) = (400u32, 720u32);
         let mut first = [0u8; 32768];
         let mut second = [0u8; 32768];
-        let count = opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                   width, height, first.as_mut_ptr(), first.len());
+        let count = opu_text_spans(
+            ir.as_ptr(),
+            ir.len(),
+            empty.as_ptr(),
+            empty.len(),
+            width,
+            height,
+            first.as_mut_ptr(),
+            first.len(),
+        );
         assert!(count > 0, "calculator must export text spans");
-        let other = opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                   width, height, second.as_mut_ptr(), second.len());
+        let other = opu_text_spans(
+            ir.as_ptr(),
+            ir.len(),
+            empty.as_ptr(),
+            empty.len(),
+            width,
+            height,
+            second.as_mut_ptr(),
+            second.len(),
+        );
         assert_eq!(count, other);
         assert_eq!(first, second, "span JSON is byte-identical across runs");
-        let _: JsonValue = serde_json::from_slice(&first[..first.iter()
-            .position(|b| *b == 0).unwrap_or(first.len())]).unwrap();
+        let _: JsonValue = serde_json::from_slice(
+            &first[..first.iter().position(|b| *b == 0).unwrap_or(first.len())],
+        )
+        .unwrap();
         assert_eq!(
-            opu_text_spans(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                           width, height, first.as_mut_ptr(), 1),
+            opu_text_spans(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                width,
+                height,
+                first.as_mut_ptr(),
+                1
+            ),
             OPU_SPAN_ERR_OVERFLOW
         );
         let mut with_text = vec![0u8; (width * height * 4) as usize];
         let mut graphics = vec![0u8; with_text.len()];
         assert_eq!(
-            opu_frame_from_ir(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                              with_text.as_mut_ptr(), width, height),
+            opu_frame_from_ir(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                with_text.as_mut_ptr(),
+                width,
+                height
+            ),
             OPU_OK
         );
         assert_eq!(
-            opu_frame_from_ir_suppressed(ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                         graphics.as_mut_ptr(), width, height),
+            opu_frame_from_ir_suppressed(
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                graphics.as_mut_ptr(),
+                width,
+                height
+            ),
             OPU_OK
         );
-        assert_ne!(with_text, graphics, "suppressed frame must not paint bitmap text");
+        assert_ne!(
+            with_text, graphics,
+            "suppressed frame must not paint bitmap text"
+        );
     }
 
     #[test]
@@ -1087,19 +1174,51 @@ mod tests {
         let mut at400 = vec![0u8; len];
         let mut settled = vec![0u8; len];
         assert_eq!(
-            opu_renderer_frame_at(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                  std::ptr::null(), 0, 0, at0.as_mut_ptr(), width, height),
+            opu_renderer_frame_at(
+                renderer,
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                std::ptr::null(),
+                0,
+                0,
+                at0.as_mut_ptr(),
+                width,
+                height
+            ),
             OPU_OK
         );
         assert_eq!(
-            opu_renderer_frame_at(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                  std::ptr::null(), 0, 400, at400.as_mut_ptr(), width, height),
+            opu_renderer_frame_at(
+                renderer,
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                std::ptr::null(),
+                0,
+                400,
+                at400.as_mut_ptr(),
+                width,
+                height
+            ),
             OPU_OK
         );
         assert_ne!(at0, at400, "elapsed_ms must change the rendered frame");
         assert_eq!(
-            opu_renderer_frame_route(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
-                                     std::ptr::null(), 0, settled.as_mut_ptr(), width, height),
+            opu_renderer_frame_route(
+                renderer,
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                std::ptr::null(),
+                0,
+                settled.as_mut_ptr(),
+                width,
+                height
+            ),
             OPU_OK
         );
         assert_eq!(at400, settled, "settled time must match the route entry");
