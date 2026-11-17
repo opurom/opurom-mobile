@@ -83,6 +83,17 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetPress(
     JNIEnv *env, jclass clazz, jlong renderer, jint node_id, jlong press_start_tick,
     jlong touch_x, jlong touch_y, jint on);
 
+/* Caller-owned gesture arena: pointer, deadline query and logical tick. */
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererPointer(
+    JNIEnv *env, jclass clazz, jlong renderer, jint kind, jint pointer_id, jint node_id,
+    jlong time_ms, jlong local_x, jlong local_y, jlong global_x, jlong global_y, jlongArray out);
+
+JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererNextDeadlineMs(
+    JNIEnv *env, jclass clazz, jlong renderer);
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTick(
+    JNIEnv *env, jclass clazz, jlong renderer, jlong t_ms, jlongArray out);
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray route, jbyteArray out,
     jint width, jint height);

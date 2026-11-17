@@ -563,6 +563,9 @@ if (!ndk) {
       'Java_org_opurom_mobile_OpuromNative_opuRendererFrameRoute',
       'Java_org_opurom_mobile_OpuromNative_opuRendererFrameAt',
       'Java_org_opurom_mobile_OpuromNative_opuRendererSetPress',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererPointer',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererNextDeadlineMs',
+      'Java_org_opurom_mobile_OpuromNative_opuRendererTick',
       'Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute',
       'Java_org_opurom_mobile_OpuromNative_opuIrRouteAt',
@@ -585,6 +588,7 @@ if (!ndk) {
       'opu_ir_initial_route', 'opu_ir_route_at',
       'opu_hit_test', 'opu_tap_node',
       'opu_text_spans', 'opu_text_spans_route', 'opu_renderer_set_suppress_text', 'opu_renderer_set_press',
+      'opu_renderer_pointer', 'opu_renderer_next_deadline_ms', 'opu_renderer_tick',
       'opu_frame_from_ir_suppressed',
     ];
     // Word-boundary match: a prefix symbol (opu_text_spans_route) must not

@@ -31,6 +31,17 @@ public final class OpuromNative {
     public static final int ERR_PANIC = 5;
     public static final int ERR_IR = 6;
     public static final int ERR_STATE = 7;
+    public static final int ERR_TIME = 8;
+
+    public static final int POINTER_DOWN = 1;
+    public static final int POINTER_MOVE = 2;
+    public static final int POINTER_UP = 3;
+    public static final int POINTER_CANCEL = 4;
+    public static final int GESTURE_NONE = 0;
+    public static final int GESTURE_TAP = 1;
+    public static final int GESTURE_DOUBLE_TAP = 2;
+    public static final int GESTURE_LONG_PRESS = 3;
+    public static final int GESTURE_DRAG = 4;
 
     public static final int EVENT_TAP = 1;
     public static final int EVENT_RESET = 2;
@@ -149,6 +160,21 @@ public final class OpuromNative {
      */
     public static native int opuRendererSetPress(long renderer, int nodeId, long pressStartTick,
                                                  long touchX, long touchY, int on);
+
+    /**
+     * Gesture arena entry points (ANIMATION_AND_PHYSICS.md 8). All times are
+     * caller-owned logical milliseconds; a rewind returns {@link #ERR_TIME}.
+     * {@code out} is optional and receives {@code [code, node, dx, dy]}.
+     */
+    public static native int opuRendererPointer(long renderer, int kind, int pointerId,
+                                                int nodeId, long timeMs, long localX, long localY,
+                                                long globalX, long globalY, long[] out);
+
+    /** Next gesture deadline in logical ms, or -1 for idle/null; i64::MAX is not a sentinel. */
+    public static native long opuRendererNextDeadlineMs(long renderer);
+
+    /** Advance the gesture arena; equal or older ticks return {@link #ERR_TIME}. */
+    public static native int opuRendererTick(long renderer, long tMs, long[] out);
 
     /** One-shot multi-page render; see {@link #opuRendererFrameRoute}. */
     public static native int opuFrameFromIrRoute(byte[] irJson, byte[] stateJson, byte[] route,

@@ -12,14 +12,10 @@ import android.text.TextUtils;
 import android.text.TextUtils.TruncateAt;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.SystemClock;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -61,6 +57,7 @@ public final class MainActivity extends Activity {
     private static final String TOUCH_TAG = "OpuromTouch";
     // A0 frame pump: caller-owned fixed-step clock, no wall clock, no new opt-in flag.
     private static final int FRAME_STEP_MS = 16;
+    private static final int LONG_PRESS_MS = 500;
     private static final int ANIM_SETTLED_MS = 4000;
     private static final String PRESS_TAG = "OpuromPress";
     // Confirm keeps the frame pump alive for the renderer's fade-out controller.
@@ -106,26 +103,15 @@ public final class MainActivity extends Activity {
     // animation property; otherwise renderFrame keeps the exact SETTLED path.
     private boolean animated;
     private int elapsedMs;
+    // Monotonic caller clock for the gesture ABI; never reset by animation patches.
+    private long gestureClockMs;
     private boolean pumpQueued;
     private final FramePump framePump = new FramePump(this);
     // Caller-owned press phase; never written into stateJson or the IR.
     private final TouchPhase press = new TouchPhase();
-    private final Handler pressHandler = new Handler(Looper.getMainLooper());
-    private final LongPressCheck longPressCheck = new LongPressCheck(this);
-
-    /** Marks longPressed after the platform timeout while the same node is held. */
-    static final class LongPressCheck implements Runnable {
-        private final MainActivity host;
-
-        LongPressCheck(MainActivity host) {
-            this.host = host;
-        }
-
-        @Override
-        public void run() {
-            host.onLongPressTimeout();
-        }
-    }
+    // Renderer-owned gesture arena: logical deadline and one gesture result.
+    private long gestureDeadline = -1L;
+    private final long[] gestureOut = new long[4];
 
     /** Fixed-step animation clock; a named class keeps d8 dexing simple. */
     static final class FramePump implements Choreographer.FrameCallback {
@@ -153,6 +139,8 @@ public final class MainActivity extends Activity {
             }
             host.elapsedMs = (held || fading) ? host.elapsedMs + FRAME_STEP_MS
                     : Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
+            host.gestureClockMs += FRAME_STEP_MS;
+            host.runGestureTicks();
             host.renderFrame();
             if (held || fading || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
                 host.pumpQueued = true;
@@ -217,12 +205,18 @@ public final class MainActivity extends Activity {
                 host.onPressDown(event.getX(), event.getY());
                 return true;
             }
+            if (action == MotionEvent.ACTION_MOVE) {
+                host.onPointerMove(event.getX(), event.getY());
+                return true;
+            }
             if (action == MotionEvent.ACTION_UP) {
+                host.onPointerUp(event.getX(), event.getY());
                 host.onPressUp(false);
                 host.onTap(event.getX(), event.getY());
                 return true;
             }
             if (action == MotionEvent.ACTION_CANCEL) {
+                host.onPointerCancel();
                 host.onPressUp(true);
                 return true;
             }
@@ -371,14 +365,10 @@ public final class MainActivity extends Activity {
         int y = TouchPhase.toCanvas(screenY, frameScaleY);
         int node = OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
                 rendererWidth, rendererHeight);
-        press.down(node, x, y, SystemClock.uptimeMillis());
+        press.down(node, x, y, elapsedMs);
         Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
         reportPressPhase(press, node != TouchPhase.NO_NODE ? PRESS_DOWN : PRESS_CLEAR, false);
-        if (node != TouchPhase.NO_NODE) {
-            pressHandler.removeCallbacks(longPressCheck);
-            pressHandler.postDelayed(longPressCheck,
-                    ViewConfiguration.getLongPressTimeout());
-        }
+        reportGesturePointer(OpuromNative.POINTER_DOWN, node, x, y);
     }
 
     /**
@@ -387,7 +377,6 @@ public final class MainActivity extends Activity {
      * is no cancel channel in the agreed ABI, so cancel takes the clear path.
      */
     private void onPressUp(boolean cancelled) {
-        pressHandler.removeCallbacks(longPressCheck);
         if (!press.isPressed()) {
             Log.d(PRESS_TAG, "up cancelled=" + cancelled + " no press");
             return;
@@ -414,17 +403,58 @@ public final class MainActivity extends Activity {
         Log.d(PRESS_TAG, "clear node=" + node + " tick=" + elapsedMs);
     }
 
-    private void onLongPressTimeout() {
-        // Long-press is a gesture-semantics flag only. It must NOT re-report the
-        // press phase: doing so re-stamps press_start_tick with the current
-        // animation clock and restarts the ripple from zero (visible as a
-        // second splash mid-hold). The renderer press opens once on DOWN and
-        // closes once on UP/CANCEL; the clock origin never moves in between.
-        if (press.isPressed()
-                && press.markLongPressed(SystemClock.uptimeMillis(),
-                        ViewConfiguration.getLongPressTimeout())) {
-            Log.d(PRESS_TAG, "long node=" + press.node);
+    // Gesture semantics enter the host only through the renderer's deadline
+    // and tick result. The long-press flag never re-reports the press phase:
+    // that would re-stamp press_start_tick and restart the ripple mid-hold.
+    private void onPointerMove(float screenX, float screenY) {
+        if (press.isPressed()) {
+            reportGesturePointer(OpuromNative.POINTER_MOVE, press.node,
+                    TouchPhase.toCanvas(screenX, frameScaleX),
+                    TouchPhase.toCanvas(screenY, frameScaleY));
         }
+    }
+
+    private void onPointerUp(float screenX, float screenY) {
+        reportGesturePointer(OpuromNative.POINTER_UP, press.node,
+                TouchPhase.toCanvas(screenX, frameScaleX),
+                TouchPhase.toCanvas(screenY, frameScaleY));
+    }
+
+    private void onPointerCancel() {
+        reportGesturePointer(OpuromNative.POINTER_CANCEL, press.node, press.x, press.y);
+    }
+
+    private void reportGesturePointer(int kind, int node, int x, int y) {
+        if (renderer == 0) {
+            return;
+        }
+        int status = OpuromNative.opuRendererPointer(renderer, kind, 0, node,
+                gestureClockMs, x, y, x, y, gestureOut);
+        gestureDeadline = OpuromNative.opuRendererNextDeadlineMs(renderer);
+        Log.d(PRESS_TAG, "pointer kind=" + kind + " node=" + node
+                + " t=" + gestureClockMs + " status=" + status + " deadline=" + gestureDeadline);
+        if (gestureDeadline >= 0) {
+            startPump();
+        }
+    }
+
+    private void runGestureTicks() {
+        if (renderer == 0 || gestureDeadline < 0 || elapsedMs < gestureDeadline) {
+            return;
+        }
+        // Inject the exact logical deadline, not the frame's overshoot, so a
+        // replay of the same event+tick sequence stays byte-identical.
+        long tick = gestureDeadline;
+        gestureDeadline = -1L;
+        int status = OpuromNative.opuRendererTick(renderer, tick, gestureOut);
+        Log.d(PRESS_TAG, "tick t=" + tick + " status=" + status
+                + " code=" + gestureOut[0]);
+        if (status == OpuromNative.OK && gestureOut[0] == OpuromNative.GESTURE_LONG_PRESS) {
+            if (press.markLongPressed(tick, LONG_PRESS_MS)) {
+                Log.d(PRESS_TAG, "long node=" + gestureOut[1]);
+            }
+        }
+        gestureDeadline = OpuromNative.opuRendererNextDeadlineMs(renderer);
     }
 
     /**

@@ -46,7 +46,7 @@ test('press phase is captured on DOWN and released on UP or CANCEL', () => {
   assert.match(ACTIVITY, /host\.onPressDown\(event\.getX\(\), event\.getY\(\)\)/);
   assert.match(ACTIVITY, /host\.onPressUp\(false\)/);
   assert.match(ACTIVITY, /host\.onPressUp\(true\)/);
-  assert.match(ACTIVITY, /ViewConfiguration\.getLongPressTimeout\(\)/);
+  assert.match(ACTIVITY, /private static final int LONG_PRESS_MS = 500/);
   assert.match(ACTIVITY, /TouchPhase\.toCanvas\(screenX, frameScaleX\)/);
   assert.match(ACTIVITY, /private void reportPressPhase\(TouchPhase phase/);
   const seams = ACTIVITY.match(/private void reportPressPhase\(/g) || [];
@@ -68,7 +68,7 @@ test('a confirmed release keeps pumping until the press fade completes', () => {
   assert.match(ACTIVITY, /!animated && !press\.isPressed\(\) && !press\.isFading\(\)/);
   assert.match(ACTIVITY, /if \(animated && !press\.isFading\(\)\)/);
   // Long press must still not re-report the phase.
-  assert.match(ACTIVITY, /must NOT re-report the/);
+  assert.match(ACTIVITY, /never re-reports the press phase/);
   const PHASE = read('android/app/src/main/java/org/opurom/mobile/TouchPhase.java');
   assert.match(PHASE, /boolean isFading\(\)/);
   assert.match(PHASE, /boolean fadeDone\(long frameTick, long fadeMs\)/);

@@ -363,6 +363,46 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetPress(
                                         (int64_t)touch_y, (int32_t)on);
 }
 
+static void write_gesture(JNIEnv *env, jlongArray out, OpuGesture gesture) {
+    if (out == NULL) return;
+    jsize len = (*env)->GetArrayLength(env, out);
+    if (len < 4) return;
+    jlong fields[4] = { gesture.code, gesture.node_id, gesture.dx, gesture.dy };
+    (*env)->SetLongArrayRegion(env, out, 0, 4, fields);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererPointer(
+    JNIEnv *env, jclass clazz, jlong renderer, jint kind, jint pointer_id, jint node_id,
+    jlong time_ms, jlong local_x, jlong local_y, jlong global_x, jlong global_y, jlongArray out) {
+    (void)clazz;
+    if (renderer == 0) return (jint)OPU_ERR_NULL;
+    OpuPointerEvent event = {
+        (uint32_t)kind, (uint32_t)pointer_id, (uint32_t)node_id, (int64_t)time_ms,
+        (int64_t)local_x, (int64_t)local_y, (int64_t)global_x, (int64_t)global_y
+    };
+    OpuGesture gesture = { OPU_GESTURE_NONE, 0, 0, 0 };
+    jint status = (jint)opu_renderer_pointer((OpuRenderer *)(intptr_t)renderer, &event, &gesture);
+    if (status == OPU_OK) write_gesture(env, out, gesture);
+    return status;
+}
+
+JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererNextDeadlineMs(
+    JNIEnv *env, jclass clazz, jlong renderer) {
+    (void)env;
+    (void)clazz;
+    return (jlong)opu_renderer_next_deadline_ms((OpuRenderer *)(intptr_t)renderer);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTick(
+    JNIEnv *env, jclass clazz, jlong renderer, jlong t_ms, jlongArray out) {
+    (void)clazz;
+    if (renderer == 0) return (jint)OPU_ERR_NULL;
+    OpuGesture gesture = { OPU_GESTURE_NONE, 0, 0, 0 };
+    jint status = (jint)opu_renderer_tick((OpuRenderer *)(intptr_t)renderer, (int64_t)t_ms, &gesture);
+    if (status == OPU_OK) write_gesture(env, out, gesture);
+    return status;
+}
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray out) {
     jbyte *ir_bytes;

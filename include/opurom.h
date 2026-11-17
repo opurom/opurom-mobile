@@ -37,6 +37,33 @@
 #define OPU_ERR_PANIC 5
 #define OPU_ERR_IR 6
 #define OPU_ERR_STATE 7
+#define OPU_ERR_TIME 8
+
+typedef enum {
+    OPU_POINTER_DOWN = 1, OPU_POINTER_MOVE = 2,
+    OPU_POINTER_UP = 3, OPU_POINTER_CANCEL = 4
+} OpuPointerKind;
+
+typedef struct {
+    uint32_t kind;        /* OpuPointerKind */
+    uint32_t pointer_id;  /* host pointer identity, kept verbatim */
+    uint32_t node_id;     /* opu_hit_test result; 0 means miss */
+    int64_t  time_ms;     /* caller-owned logical time, never a wall clock */
+    int64_t  local_x, local_y;
+    int64_t  global_x, global_y;
+} OpuPointerEvent;
+
+typedef enum {
+    OPU_GESTURE_NONE = 0, OPU_GESTURE_TAP = 1,
+    OPU_GESTURE_DOUBLE_TAP = 2, OPU_GESTURE_LONG_PRESS = 3,
+    OPU_GESTURE_DRAG = 4
+} OpuGestureCode;
+
+typedef struct {
+    uint32_t code;        /* OpuGestureCode, 0 = none */
+    uint32_t node_id;
+    int32_t  dx, dy;      /* drag delta only */
+} OpuGesture;
 
 #define OPU_EVENT_TAP 1
 #define OPU_EVENT_RESET 2
@@ -188,6 +215,18 @@ int32_t opu_text_spans_route(const uint8_t *ir_json, size_t ir_len,
                              const uint8_t *route, size_t route_len,
                              uint32_t width, uint32_t height,
                              uint8_t *out_json, size_t out_capacity);
+
+/*
+ * Gesture arena host tick (ANIMATION_AND_PHYSICS.md section 8). The renderer
+ * owns the arena; every time value is caller-owned logical time. A rewind or
+ * a non-monotonic tick returns OPU_ERR_TIME. `out` may be NULL when the caller
+ * does not want a gesture result. next_deadline_ms returns -1 for idle or a
+ * null handle; i64::MAX is a legitimate saturating value, not a sentinel.
+ */
+int32_t opu_renderer_pointer(OpuRenderer *renderer, const OpuPointerEvent *event,
+                             OpuGesture *out);
+int64_t opu_renderer_next_deadline_ms(OpuRenderer *renderer);
+int32_t opu_renderer_tick(OpuRenderer *renderer, int64_t t_ms, OpuGesture *out);
 
 /* Opt-in graphics-only raster. Default frames keep their bitmap text. */
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
