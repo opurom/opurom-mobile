@@ -234,7 +234,7 @@ impl OpuRenderer {
         match self.press_phase(ir, state, elapsed_ms) {
             Some(p) => self
                 .renderer
-                .render_with_press(ir, state, elapsed_ms, Some(&p)),
+                .render_with_press_incremental(ir, state, elapsed_ms, Some(&p)),
             None => self.renderer.render_incremental_at(ir, state, elapsed_ms),
         }
     }
@@ -578,11 +578,12 @@ pub extern "C" fn opu_renderer_frame_at(
                 Some(p)
             });
             let frame = match phase {
-                Some(p) => {
-                    owned
-                        .renderer
-                        .render_with_press(active, &state, elapsed_ms.max(0), Some(&p))
-                }
+                Some(p) => owned.renderer.render_with_press_incremental(
+                    active,
+                    &state,
+                    elapsed_ms.max(0),
+                    Some(&p),
+                ),
                 None => owned
                     .renderer
                     .render_incremental_at(active, &state, elapsed_ms.max(0)),
