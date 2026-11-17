@@ -75,6 +75,11 @@ public final class MainActivity extends Activity {
 
     private byte[] graphicsIr;
     private byte[] stateJson = "{}".getBytes(StandardCharsets.UTF_8);
+    // Active route for multi-page IR. Null on single-page documents; the host
+    // advances it from the reserved @nav signal returned by opuTapNode.
+    private String activeRoute;
+    private final java.util.ArrayDeque<String> routeStack =
+            new java.util.ArrayDeque<>();
     private boolean dark;
     private IrView view;
     private TextLayerView textLayer;
@@ -418,7 +423,12 @@ public final class MainActivity extends Activity {
         if (status != OpuromNative.OK) {
             return;
         }
+        String nav = extractNav(out);
         stateJson = trim(out);
+        stateJson = stripNav(stateJson);
+        if (nav != null) {
+            applyNav(nav);
+        }
         if (animated) {
             elapsedMs = 0;
         }
@@ -432,6 +442,55 @@ public final class MainActivity extends Activity {
             length += 1;
         }
         return Arrays.copyOf(data, length);
+    }
+
+    /** Reads the reserved @nav value from a tap result, or null when absent. */
+    private static String extractNav(byte[] data) {
+        String json = new String(trim(data), StandardCharsets.UTF_8);
+        String key = "\"@nav\":\"";
+        int at = json.indexOf(key);
+        if (at < 0) {
+            return null;
+        }
+        int from = at + key.length();
+        int end = json.indexOf('"', from);
+        return end < 0 ? null : json.substring(from, end);
+    }
+
+    /** Removes the reserved @nav field so it is not reused as host state. */
+    private static byte[] stripNav(byte[] data) {
+        String json = new String(data, StandardCharsets.UTF_8);
+        String key = "\"@nav\":\"";
+        int at = json.indexOf(key);
+        if (at < 0) {
+            return data;
+        }
+        int end = json.indexOf('"', at + key.length());
+        if (end < 0) {
+            return data;
+        }
+        int valueEnd = end + 1;
+        int next = valueEnd;
+        if (next < json.length() && json.charAt(next) == ',') {
+            next += 1;
+        } else if (at > 0 && json.charAt(at - 1) == ',') {
+            at -= 1;
+        }
+        String cleaned = json.substring(0, at) + json.substring(next);
+        return cleaned.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Applies a navigation signal: a route name pushes, ".." pops. */
+    private void applyNav(String nav) {
+        if ("..".equals(nav)) {
+            activeRoute = routeStack.isEmpty() ? null : routeStack.pop();
+        } else {
+            if (activeRoute != null) {
+                routeStack.push(activeRoute);
+            }
+            activeRoute = nav;
+        }
+        Log.d(TOUCH_TAG, "nav=" + nav + " active=" + activeRoute);
     }
 
     /** Renders the current IR and state into a bitmap sized to the view. */
@@ -468,12 +527,14 @@ public final class MainActivity extends Activity {
         int status;
         // Pressed frames need the caller clock so the ripple advances.
         boolean clocked = animated || press.isPressed();
+        byte[] route = activeRoute == null ? null
+                : activeRoute.getBytes(StandardCharsets.UTF_8);
         if (renderer != 0 && clocked) {
-            status = OpuromNative.opuRendererFrameAt(renderer, graphicsIr, stateJson, null,
-                    elapsedMs, pixels, width, height);
+            status = OpuromNative.opuRendererFrameAt(renderer, graphicsIr, stateJson,
+                    route, elapsedMs, pixels, width, height);
         } else if (renderer != 0) {
             status = OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
-                    null, pixels, width, height);
+                    route, pixels, width, height);
         } else {
             status = OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
                     pixels, width, height);
@@ -505,6 +566,8 @@ public final class MainActivity extends Activity {
     private void applyIr(byte[] ir) {
         graphicsIr = ir;
         stateJson = "{}".getBytes(StandardCharsets.UTF_8);
+        activeRoute = OpuromNative.initialRoute(ir);
+        routeStack.clear();
         elapsedMs = 0;
         animated = declaresAnimation(ir);
     }

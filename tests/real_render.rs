@@ -645,3 +645,40 @@ fn reusable_renderer_serves_route_frames() {
     assert_eq!(&buf[..n], b"Detail");
     opu_renderer_free(handle);
 }
+
+#[test]
+fn tap_forwards_reserved_nav_signal_to_host() {
+    // A Home button pushes Detail. The reserved @nav signal is a dispatch
+    // result, not a state key, so the tap ABI must surface it explicitly.
+    const NAV_IR: &str = r##"{
+      "ir": "0.1.0", "app": "Nav",
+      "state": [],
+      "initialRoute": "Home",
+      "routes": {
+        "Home": {"tree": {"id": 0, "kind": "Column", "props": {}, "children": [
+          {"id": 7, "kind": "Button", "props": {"label": "go"}, "children": [],
+           "events": {"tap": {"op": "push", "target": "Detail"}}}
+        ], "events": {}}, "title": "Home"},
+        "Detail": {"tree": {"id": 1, "kind": "Column", "props": {}, "children": [],
+          "events": {}}, "title": "Detail"}
+      },
+      "theme": {}
+    }"##;
+    let empty = b"{}";
+    let mut out = [0u8; 8192];
+    let status = opu_tap_node(
+        NAV_IR.as_ptr(),
+        NAV_IR.len(),
+        empty.as_ptr(),
+        empty.len(),
+        7,
+        out.as_mut_ptr(),
+        out.len(),
+    );
+    assert_eq!(status, OPU_OK);
+    let len = out.iter().position(|b| *b == 0).unwrap_or(out.len());
+    let text = std::str::from_utf8(&out[..len]).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(parsed["@nav"], serde_json::Value::String("Detail".into()));
+    assert!(parsed.as_object().unwrap().keys().all(|k| !k.starts_with('@') || k == "@nav"));
+}

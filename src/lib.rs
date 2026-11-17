@@ -685,13 +685,22 @@ fn tap_node_impl(
         };
         runtime.apply_patch(&patch).map_err(|_| OPU_ERR_STATE)?;
     }
-    let _ = runtime
+    let patches = runtime
         .dispatch(CoreEvent::Tap { node_id })
         .map_err(|_| OPU_ERR_EVENT)?;
     let mut state = JsonMap::new();
     for patch in runtime.snapshot() {
         let value = serde_json::to_value(patch.value).map_err(|_| OPU_ERR_STATE)?;
         state.insert(patch.name, value);
+    }
+    // Reserved navigation signals (e.g. @nav) are returned by dispatch but
+    // never enter the state mirror. Forward them to the host so it can switch
+    // the active route; the host consumes and strips them before reuse.
+    for patch in patches {
+        if patch.name.starts_with('@') {
+            let value = serde_json::to_value(patch.value).map_err(|_| OPU_ERR_STATE)?;
+            state.insert(patch.name, value);
+        }
     }
     let text = serde_json::to_string(&JsonValue::Object(state)).map_err(|_| OPU_ERR_STATE)?;
     let bytes = text.as_bytes();
