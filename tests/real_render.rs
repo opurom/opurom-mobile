@@ -726,3 +726,42 @@ fn route_text_spans(ir: &str, state: &str, route: &str) -> String {
     let len = out.iter().position(|b| *b == 0).unwrap_or(out.len());
     String::from_utf8(out[..len].to_vec()).unwrap()
 }
+
+#[test]
+fn frame_at_cache_reuses_ir_and_invalidates_on_route_change() {
+    // The press pump reuses the parsed IR across frames; identical inputs must
+    // stay byte-identical, and switching route must invalidate the cache.
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let empty = b"{}";
+    let mut a = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
+    let mut b = vec![0u8; a.len()];
+    let frame_at = |route: &str, out: &mut [u8]| {
+        opu_renderer_frame_at(
+            handle,
+            TWO_ROUTE_IR.as_ptr(),
+            TWO_ROUTE_IR.len(),
+            empty.as_ptr(),
+            empty.len(),
+            route.as_ptr(),
+            route.len(),
+            SETTLED_MS,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(frame_at("Home", &mut a), OPU_OK);
+    assert_eq!(frame_at("Home", &mut b), OPU_OK);
+    assert_eq!(a, b, "cached repeat frame is byte-identical");
+    // A different route invalidates the cache and renders the Detail tree.
+    assert_eq!(frame_at("Detail", &mut b), OPU_OK);
+    assert_ne!(a, b, "route change invalidates the cache");
+    // Switching back must settle to a stable image. (Exact equality with the
+    // first Home frame is an incremental-render concern, not the IR cache.)
+    assert_eq!(frame_at("Home", &mut b), OPU_OK);
+    let settled_home = b.clone();
+    assert_eq!(frame_at("Home", &mut b), OPU_OK);
+    assert_eq!(b, settled_home, "Home frame settles to a stable image");
+    opu_renderer_free(handle);
+}

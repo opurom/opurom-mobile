@@ -180,6 +180,17 @@ pub extern "C" fn opu_state_free(state: *mut OpuState) {
     );
 }
 
+/// FNV-1a over a byte slice: a cheap content key so the press frame pump can
+/// reuse a parsed IR instead of re-parsing multi-megabyte base64 every frame.
+fn ir_content_hash(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in bytes {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
 /// Opaque reusable renderer. C callers see only an incomplete struct type.
 #[repr(C)]
 pub struct OpuRenderer {
@@ -188,9 +199,35 @@ pub struct OpuRenderer {
     height: u32,
     /// Caller-owned press phase; None keeps every frame byte-identical.
     press: Option<PressPhase>,
+    /// Last parsed IR keyed by (content hash, route). Press frames reuse it;
+    /// a changed IR or route invalidates it. State is never cached (small).
+    ir_cache: Option<(u64, Option<String>, Ir)>,
 }
 
 impl OpuRenderer {
+    /// Ensures the cache holds the parsed, route-selected IR for this input.
+    /// Reuses it across press frames; a changed IR or route refreshes it.
+    /// Parsing a large base64-bearing IR every frame is the dominant cost on
+    /// device. State is never cached (small, and may change per frame).
+    fn cache_active_ir(
+        &mut self,
+        ir_json: *const u8,
+        ir_len: usize,
+        route: Option<&str>,
+    ) -> Result<(), i32> {
+        let bytes = json_str(ir_json, ir_len, OPU_ERR_IR)?;
+        let key = ir_content_hash(bytes.as_bytes());
+        if let Some((cached_key, cached_route, _)) = &self.ir_cache {
+            if *cached_key == key && cached_route.as_deref() == route {
+                return Ok(());
+            }
+        }
+        let parsed = parse_ir(bytes).map_err(|_| OPU_ERR_IR)?;
+        let active = route_ir(&parsed, route)?.into_owned();
+        self.ir_cache = Some((key, route.map(str::to_owned), active));
+        Ok(())
+    }
+
     /// Renders one frame, honouring the press phase when one is set. Without a
     /// press this is the exact incremental call, so default frames are unchanged.
     fn render_at(&mut self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Frame {
@@ -283,6 +320,7 @@ pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer 
                 width,
                 height,
                 press: None,
+                ir_cache: None,
             }))
         },
         std::ptr::null_mut(),
@@ -497,16 +535,58 @@ pub extern "C" fn opu_renderer_frame_at(
             if (owned.width, owned.height) != (width, height) {
                 return OPU_ERR_DIMENSION;
             }
-            let (ir, state, byte_len) =
-                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
-                    Ok(inputs) => inputs,
-                    Err(code) => return code,
-                };
-            let active = match route_str(route, route_len).and_then(|r| route_ir(&ir, r)) {
-                Ok(active) => active,
+            if out.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let byte_len = match frame_len(width, height) {
+                Some(len) => len,
+                None => return OPU_ERR_DIMENSION,
+            };
+            let route = match route_str(route, route_len) {
+                Ok(route) => route,
                 Err(code) => return code,
             };
-            let frame = owned.render_at(&active, &state, elapsed_ms.max(0));
+            // Reuse the parsed, route-selected IR across press frames. Parsing
+            // a 1.88 MB base64-bearing IR on every pump frame caused the
+            // multi-second visible stalls on device.
+            if let Err(code) = owned.cache_active_ir(ir_json, ir_len, route) {
+                return code;
+            }
+            let state_json = match json_str(state_json, state_len, OPU_ERR_STATE) {
+                Ok(s) => s,
+                Err(code) => return code,
+            };
+            let press = owned.press;
+            let width_c = owned.width;
+            let height_c = owned.height;
+            // Disjoint field borrows: active IR from the cache, renderer mutable.
+            let active = match &owned.ir_cache {
+                Some((_, _, ir)) => ir,
+                None => return OPU_ERR_IR,
+            };
+            let state = match parse_state_json(active, state_json) {
+                Ok(view) => view,
+                Err(_) => return OPU_ERR_STATE,
+            };
+            let phase = press.and_then(|mut p| {
+                if let Some((x, y)) = p.touch {
+                    p.touch = layout_at(active, &state, width_c, height_c, elapsed_ms.max(0))
+                        .iter()
+                        .find(|n| n.id == p.node_id)
+                        .map(|n| (x - n.rect.x, y - n.rect.y));
+                }
+                Some(p)
+            });
+            let frame = match phase {
+                Some(p) => {
+                    owned
+                        .renderer
+                        .render_with_press(active, &state, elapsed_ms.max(0), Some(&p))
+                }
+                None => owned
+                    .renderer
+                    .render_incremental_at(active, &state, elapsed_ms.max(0)),
+            };
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
