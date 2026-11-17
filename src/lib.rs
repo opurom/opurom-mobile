@@ -20,8 +20,8 @@ use opurom_core::{
     Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime, Value as CoreValue,
 };
 use opurom_render::{
-    hit, layout, layout_at, parse_ir, parse_state_json, text_spans_for, Frame, Ir, PressPhase,
-    Renderer, StateView, SETTLED_MS,
+    hit, layout, layout_at, parse_ir, parse_state_json, tap_hit_rect, text_spans_for, Frame,
+    GestureKind, Ir, Node, PressPhase, Renderer, StateView, SETTLED_MS,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
@@ -722,6 +722,17 @@ pub extern "C" fn opu_renderer_redraw_stats(
     )
 }
 
+/// Drag-only classification for a laid-out id, read from the IR tree that
+/// `layout` consumed. Matches the render arena's `gesture == Drag` rule.
+fn ir_node_is_drag_only(node: &Node, id: u32) -> bool {
+    if node.id == id {
+        return node.props.gesture == Some(GestureKind::Drag);
+    }
+    node.children
+        .iter()
+        .any(|child| ir_node_is_drag_only(child, id))
+}
+
 /// Top-most laid-out node containing the viewport point, or 0 for a miss.
 /// The viewport must match the one passed to the render call, so the host can
 /// forward a screen coordinate without a second layout.
@@ -747,7 +758,8 @@ pub extern "C" fn opu_hit_test(
             };
             let laid = layout(&ir, &state, width, height);
             for node in laid.iter().rev() {
-                if hit(&node.rect, x as i64, y as i64) {
+                let target = tap_hit_rect(node.rect, ir_node_is_drag_only(&ir.tree, node.id));
+                if hit(&target, x as i64, y as i64) {
                     return node.id;
                 }
             }
@@ -1323,6 +1335,10 @@ mod tests {
             }
         }
         assert!(unique.len() >= 2, "expected at least two laid-out nodes");
+        assert_eq!(
+            unique,
+            vec![1, 2, 3, 4, 5, 6, 7, 10, 9, 11, 12, 13, 15, 14, 16, 17, 18]
+        );
         let mut tappable = Vec::new();
         let mut scratch = [0u8; 8192];
         for id in unique {
