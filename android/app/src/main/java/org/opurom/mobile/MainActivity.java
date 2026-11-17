@@ -84,6 +84,10 @@ public final class MainActivity extends Activity {
     private IrView view;
     private TextLayerView textLayer;
     private Bitmap lastFrame;
+    // Reused across frames: the pump renders continuously, so allocating two
+    // ~10 MB arrays and a Bitmap every frame churns the heap and triggers GC.
+    private byte[] framePixels;
+    private int[] frameArgb;
     private long renderer;
     private int rendererWidth;
     private int rendererHeight;
@@ -504,7 +508,12 @@ public final class MainActivity extends Activity {
                 / Math.max(viewWidth, viewHeight));
         int width = Math.max(1, (int) (viewWidth * scale));
         int height = Math.max(1, (int) (viewHeight * scale));
-        byte[] pixels = new byte[width * height * 4];
+        int pixelLen = width * height * 4;
+        if (framePixels == null || framePixels.length != pixelLen) {
+            framePixels = new byte[pixelLen];
+            frameArgb = new int[width * height];
+        }
+        byte[] pixels = framePixels;
 
         if (renderer != 0 && (rendererWidth != width || rendererHeight != height)) {
             OpuromNative.opuRendererFree(renderer);
@@ -550,7 +559,7 @@ public final class MainActivity extends Activity {
         } else {
             textLayer.clear();
         }
-        int[] argb = new int[width * height];
+        int[] argb = frameArgb;
         for (int index = 0; index < argb.length; index += 1) {
             int offset = index * 4;
             argb[index] = ((pixels[offset + 3] & 0xff) << 24)
@@ -558,7 +567,11 @@ public final class MainActivity extends Activity {
                     | ((pixels[offset + 1] & 0xff) << 8)
                     | (pixels[offset + 2] & 0xff);
         }
-        lastFrame = Bitmap.createBitmap(argb, width, height, Bitmap.Config.ARGB_8888);
+        if (lastFrame == null || lastFrame.getWidth() != width
+                || lastFrame.getHeight() != height) {
+            lastFrame = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        }
+        lastFrame.setPixels(argb, 0, width, 0, 0, width, height);
         view.invalidate();
     }
 
