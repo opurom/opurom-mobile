@@ -21,8 +21,8 @@ use opurom_core::{
 };
 use opurom_render::{
     hit, layout, layout_at, parse_ir, parse_state_json, tap_hit_rect, text_spans_for, Frame,
-    Gesture, GestureEngine, GestureKind, Ir, Node, PointerEvent, PointerKind, PressPhase,
-    Rect, Renderer, StateView, SETTLED_MS,
+    Gesture, GestureEngine, GestureKind, Ir, Node, PointerEvent, PointerKind, PressPhase, Rect,
+    Renderer, StateView, SETTLED_MS,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
@@ -331,7 +331,6 @@ impl OpuRenderer {
         }
         Some(p)
     }
-
 }
 
 /// Rebuild the gesture arena when the IR, route or viewport changes. Node
@@ -350,7 +349,11 @@ fn sync_gesture(
     if gesture_key.as_ref() == Some(&key) {
         return;
     }
-    fn collect(node: &Node, parent: Option<u32>, out: &mut HashMap<u32, (Option<u32>, Option<GestureKind>)>) {
+    fn collect(
+        node: &Node,
+        parent: Option<u32>,
+        out: &mut HashMap<u32, (Option<u32>, Option<GestureKind>)>,
+    ) {
         out.insert(node.id, (parent, node.props.gesture));
         for child in &node.children {
             collect(child, Some(node.id), out);
@@ -374,7 +377,12 @@ fn gesture_key(
     height: u32,
 ) -> Result<([u64; 3], Option<String>, u32, u32), i32> {
     let bytes = json_str(ir_json, ir_len, OPU_ERR_IR)?;
-    Ok((ir_fingerprint(bytes.as_bytes()).0, route.map(str::to_owned), width, height))
+    Ok((
+        ir_fingerprint(bytes.as_bytes()).0,
+        route.map(str::to_owned),
+        width,
+        height,
+    ))
 }
 
 /// Borrow one caller-owned JSON document. Lengths are bounded before any read so
@@ -535,8 +543,16 @@ pub extern "C" fn opu_renderer_frame(
                 Ok(key) => key,
                 Err(code) => return code,
             };
-            sync_gesture(&mut owned.gesture, &mut owned.gesture_key, &ir, &state,
-                         width, height, SETTLED_MS, key);
+            sync_gesture(
+                &mut owned.gesture,
+                &mut owned.gesture_key,
+                &ir,
+                &state,
+                width,
+                height,
+                SETTLED_MS,
+                key,
+            );
             let frame = owned.render_at(&ir, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
         },
@@ -644,8 +660,16 @@ pub extern "C" fn opu_renderer_frame_route(
                 Ok(key) => key,
                 Err(code) => return code,
             };
-            sync_gesture(&mut owned.gesture, &mut owned.gesture_key, &active, &state,
-                         width, height, SETTLED_MS, key);
+            sync_gesture(
+                &mut owned.gesture,
+                &mut owned.gesture_key,
+                &active,
+                &state,
+                width,
+                height,
+                SETTLED_MS,
+                key,
+            );
             let frame = owned.render_at(&active, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
         },
@@ -717,8 +741,16 @@ pub extern "C" fn opu_renderer_frame_at(
                 Ok(key) => key,
                 Err(code) => return code,
             };
-            sync_gesture(&mut owned.gesture, &mut owned.gesture_key, active, &state,
-                         width, height, elapsed_ms, key);
+            sync_gesture(
+                &mut owned.gesture,
+                &mut owned.gesture_key,
+                active,
+                &state,
+                width,
+                height,
+                elapsed_ms,
+                key,
+            );
             let phase = press.and_then(|mut p| {
                 if let Some((x, y)) = p.touch {
                     p.touch = layout_at(active, &state, width_c, height_c, elapsed_ms.max(0))
@@ -1248,9 +1280,20 @@ pub extern "C" fn opu_renderer_pointer(
             let owned = unsafe { &mut *renderer };
             // A miss follows the engine's cancel path, so no stale down can
             // survive a pointer that lands outside every registered node.
-            let signal = if event.node_id == 0 { PointerKind::Cancel } else { kind };
-            let pointer = PointerEvent::new(signal, event.pointer_id, event.time_ms,
-                event.local_x, event.local_y, event.global_x, event.global_y);
+            let signal = if event.node_id == 0 {
+                PointerKind::Cancel
+            } else {
+                kind
+            };
+            let pointer = PointerEvent::new(
+                signal,
+                event.pointer_id,
+                event.time_ms,
+                event.local_x,
+                event.local_y,
+                event.global_x,
+                event.global_y,
+            );
             let gesture = owned.gesture.on_event(event.node_id, &pointer);
             owned.clock_ms = event.time_ms;
             if event.kind == OPU_POINTER_DOWN {
@@ -1288,8 +1331,10 @@ pub extern "C" fn opu_renderer_tick(
                 return OPU_ERR_NULL;
             }
             let owned = unsafe { &mut *renderer };
-            if t_ms < 0 || t_ms < owned.clock_ms
-                    || owned.last_tick_ms.is_some_and(|last| t_ms <= last) {
+            if t_ms < 0
+                || t_ms < owned.clock_ms
+                || owned.last_tick_ms.is_some_and(|last| t_ms <= last)
+            {
                 return OPU_ERR_TIME;
             }
             let gesture = owned.gesture.on_tick(t_ms);
@@ -1314,7 +1359,14 @@ fn write_gesture(gesture: Option<Gesture>, node_id: u32, out: *mut OpuGesture) {
         Some(Gesture::LongPress) => (OPU_GESTURE_LONG_PRESS, 0, 0),
         Some(Gesture::Drag { dx, dy }) => (OPU_GESTURE_DRAG, dx as i32, dy as i32),
     };
-    unsafe { *out = OpuGesture { code, node_id, dx, dy } };
+    unsafe {
+        *out = OpuGesture {
+            code,
+            node_id,
+            dx,
+            dy,
+        }
+    };
 }
 
 fn frame_suppressed_impl(
@@ -1769,8 +1821,14 @@ mod tests {
 
     fn gesture_event(kind: u32, node: u32, t: i64, x: i64, y: i64) -> OpuPointerEvent {
         OpuPointerEvent {
-            kind, pointer_id: 0, node_id: node, time_ms: t,
-            local_x: x, local_y: y, global_x: x, global_y: y,
+            kind,
+            pointer_id: 0,
+            node_id: node,
+            time_ms: t,
+            local_x: x,
+            local_y: y,
+            global_x: x,
+            global_y: y,
         }
     }
 
@@ -1779,7 +1837,16 @@ mod tests {
         assert!(!renderer.is_null());
         unsafe {
             (*renderer).gesture.add_node_with(
-                7, Rect { x: 100, y: 100, w: 48, h: 48 }, None, None);
+                7,
+                Rect {
+                    x: 100,
+                    y: 100,
+                    w: 48,
+                    h: 48,
+                },
+                None,
+                None,
+            );
         }
         renderer
     }
@@ -1787,23 +1854,61 @@ mod tests {
     #[test]
     fn gesture_long_press_deadline_tick_and_contract_codes() {
         let renderer = gesture_renderer();
-        assert_eq!(opu_renderer_next_deadline_ms(renderer), -1, "idle has no deadline");
+        assert_eq!(
+            opu_renderer_next_deadline_ms(renderer),
+            -1,
+            "idle has no deadline"
+        );
         let down = gesture_event(OPU_POINTER_DOWN, 7, 100, 120, 120);
         let up = gesture_event(OPU_POINTER_UP, 7, 110, 120, 120);
-        let mut out = OpuGesture { code: 99, node_id: 99, dx: 9, dy: 9 };
-        assert_eq!(opu_renderer_pointer(std::ptr::null_mut(), &down, &mut out), OPU_ERR_NULL);
-        assert_eq!(opu_renderer_pointer(renderer, std::ptr::null(), &mut out), OPU_ERR_NULL);
-        assert_eq!(opu_renderer_tick(std::ptr::null_mut(), 100, &mut out), OPU_ERR_NULL);
-        assert_eq!(opu_renderer_pointer(renderer, &down, &mut out), OPU_OK, "down accepted");
-        assert_eq!(opu_renderer_next_deadline_ms(renderer), 600, "100 + 500ms long press");
+        let mut out = OpuGesture {
+            code: 99,
+            node_id: 99,
+            dx: 9,
+            dy: 9,
+        };
+        assert_eq!(
+            opu_renderer_pointer(std::ptr::null_mut(), &down, &mut out),
+            OPU_ERR_NULL
+        );
+        assert_eq!(
+            opu_renderer_pointer(renderer, std::ptr::null(), &mut out),
+            OPU_ERR_NULL
+        );
+        assert_eq!(
+            opu_renderer_tick(std::ptr::null_mut(), 100, &mut out),
+            OPU_ERR_NULL
+        );
+        assert_eq!(
+            opu_renderer_pointer(renderer, &down, &mut out),
+            OPU_OK,
+            "down accepted"
+        );
+        assert_eq!(
+            opu_renderer_next_deadline_ms(renderer),
+            600,
+            "100 + 500ms long press"
+        );
         assert_eq!(opu_renderer_tick(renderer, 599, &mut out), OPU_OK);
         assert_eq!(out.code, OPU_GESTURE_NONE, "no long press before deadline");
         assert_eq!(opu_renderer_tick(renderer, 600, &mut out), OPU_OK);
         assert_eq!(out.code, OPU_GESTURE_LONG_PRESS);
         assert_eq!(out.node_id, 7);
-        assert_eq!(opu_renderer_tick(renderer, 600, &mut out), OPU_ERR_TIME, "equal tick rejected");
-        assert_eq!(opu_renderer_pointer(renderer, &up, &mut out), OPU_ERR_TIME, "rewind rejected");
-        assert_eq!(opu_renderer_next_deadline_ms(renderer), -1, "settled has no deadline");
+        assert_eq!(
+            opu_renderer_tick(renderer, 600, &mut out),
+            OPU_ERR_TIME,
+            "equal tick rejected"
+        );
+        assert_eq!(
+            opu_renderer_pointer(renderer, &up, &mut out),
+            OPU_ERR_TIME,
+            "rewind rejected"
+        );
+        assert_eq!(
+            opu_renderer_next_deadline_ms(renderer),
+            -1,
+            "settled has no deadline"
+        );
         assert_eq!(opu_renderer_next_deadline_ms(std::ptr::null_mut()), -1);
         opu_renderer_free(renderer);
     }
@@ -1814,9 +1919,17 @@ mod tests {
             let renderer = gesture_renderer();
             let down = gesture_event(OPU_POINTER_DOWN, 7, 100, 120, 120);
             let move_event = gesture_event(OPU_POINTER_MOVE, 7, 120, 140, 120);
-            let mut out = OpuGesture { code: 99, node_id: 99, dx: 9, dy: 9 };
+            let mut out = OpuGesture {
+                code: 99,
+                node_id: 99,
+                dx: 9,
+                dy: 9,
+            };
             assert_eq!(opu_renderer_pointer(renderer, &down, &mut out), OPU_OK);
-            assert_eq!(opu_renderer_pointer(renderer, &move_event, &mut out), OPU_OK);
+            assert_eq!(
+                opu_renderer_pointer(renderer, &move_event, &mut out),
+                OPU_OK
+            );
             let drag = out;
             assert_eq!(drag.code, OPU_GESTURE_DRAG);
             assert_eq!(drag.dx, 20);
@@ -1828,7 +1941,11 @@ mod tests {
             (drag, after, deadline)
         }
         let first = replay();
-        assert_eq!(first, replay(), "same event+tick replay yields identical gestures");
+        assert_eq!(
+            first,
+            replay(),
+            "same event+tick replay yields identical gestures"
+        );
         assert_eq!(first.1.code, OPU_GESTURE_NONE, "drag rejects long press");
         assert_eq!(first.2, -1, "no stale deadline after drag");
     }
