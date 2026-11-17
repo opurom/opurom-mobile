@@ -53,9 +53,32 @@ test('press phase is captured on DOWN and released on UP or CANCEL', () => {
   assert.equal(seams.length, 1, 'the renderer press seam is a single function');
 });
 
+test('a confirmed release keeps pumping until the press fade completes', () => {
+  assert.match(ACTIVITY, /private static final int PRESS_FADE_MS = 375/);
+  assert.match(ACTIVITY, /private static final int PRESS_CONFIRM = 2/);
+  assert.match(ACTIVITY, /press\.confirm\(elapsedMs\)/);
+  assert.match(ACTIVITY, /reportPressPhase\(press, PRESS_CONFIRM, press\.longPressed\)/);
+  assert.match(ACTIVITY, /host\.clearConfirmedPress\(\)/);
+  // Every pump/clock gate must treat a fading press as active.
+  assert.match(ACTIVITY, /boolean fading = host\.press\.isFading\(\)/);
+  assert.match(ACTIVITY, /if \(!held && !fading && !host\.animated\)/);
+  assert.match(ACTIVITY, /host\.elapsedMs = \(held \|\| fading\)/);
+  assert.match(ACTIVITY, /if \(held \|\| fading \|\| \(host\.animated/);
+  assert.match(ACTIVITY, /animated \|\| press\.isPressed\(\) \|\| press\.isFading\(\)/);
+  assert.match(ACTIVITY, /!animated && !press\.isPressed\(\) && !press\.isFading\(\)/);
+  assert.match(ACTIVITY, /if \(animated && !press\.isFading\(\)\)/);
+  // Long press must still not re-report the phase.
+  assert.match(ACTIVITY, /must NOT re-report the/);
+  const PHASE = read('android/app/src/main/java/org/opurom/mobile/TouchPhase.java');
+  assert.match(PHASE, /boolean isFading\(\)/);
+  assert.match(PHASE, /boolean fadeDone\(long frameTick, long fadeMs\)/);
+  assert.match(PHASE, /void confirm\(long frameTick\)/);
+});
+
 test('the press phase reaches the renderer through the setter ABI', () => {
   assert.match(ACTIVITY,
-    /OpuromNative\.opuRendererSetPress\(renderer, on \? phase\.node : 0, elapsedMs,/);
+    /OpuromNative\.opuRendererSetPress\(renderer, node, elapsedMs,/);
+  assert.match(ACTIVITY, /int node = mode == PRESS_CLEAR \? 0 : phase\.node;/);
   assert.match(JAVA, /native int opuRendererSetPress\(/);
   assert.ok(SHIM.includes('Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'));
   assert.ok(VERIFY.includes("'Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'"));

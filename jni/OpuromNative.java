@@ -140,10 +140,12 @@ public final class OpuromNative {
                                                 int width, int height);
 
     /**
-     * Sets ({@code on}=1, {@code nodeId}!=0) or clears ({@code on}=0) the caller-owned press
-     * phase. {@code pressStartTick} is the caller frame clock at touch down, {@code touchX/Y} the
-     * absolute canvas touch point (either negative for the node centre). The press never enters
-     * the state JSON; frames without a press are unchanged.
+     * Drives the caller-owned press phase. on=1 (DOWN, nodeId!=0) opens a press at
+     * pressStartTick with touchX/Y as the absolute canvas point (either negative
+     * for the node centre). on=2 (CONFIRM) keeps the press and records the same
+     * clock slot as its confirm tick for the renderer's radius/fade finish; it
+     * never clears. on=0 clears. The press never enters the state JSON; frames
+     * without a press are unchanged.
      */
     public static native int opuRendererSetPress(long renderer, int nodeId, long pressStartTick,
                                                  long touchX, long touchY, int on);

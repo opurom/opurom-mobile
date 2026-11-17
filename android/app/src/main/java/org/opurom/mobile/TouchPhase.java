@@ -13,6 +13,9 @@ final class TouchPhase {
     int y;
     long downMs;
     boolean longPressed;
+    /** Set on release; the press stays live until the fade window elapses. */
+    boolean confirmed;
+    long confirmTick;
 
     TouchPhase() {
         clear();
@@ -26,14 +29,34 @@ final class TouchPhase {
         return Math.round(screen / scale);
     }
 
-    /** Opens a press; returns true when a node was hit. */
+    /** Opens a press; returns true when a node was hit. A new DOWN resets confirm. */
     boolean down(int hitNode, int canvasX, int canvasY, long nowMs) {
         node = hitNode;
         x = canvasX;
         y = canvasY;
         downMs = nowMs;
         longPressed = false;
+        confirmed = false;
+        confirmTick = 0L;
         return hitNode != NO_NODE;
+    }
+
+    /** Records the release on the caller frame clock; keeps the press live. */
+    void confirm(long frameTick) {
+        if (node != NO_NODE && !confirmed) {
+            confirmed = true;
+            confirmTick = frameTick;
+        }
+    }
+
+    /** True between a confirm release and the end of the fade-out window. */
+    boolean isFading() {
+        return confirmed && node != NO_NODE;
+    }
+
+    /** True once the fade-out window has elapsed on the caller frame clock. */
+    boolean fadeDone(long frameTick, long fadeMs) {
+        return confirmed && frameTick - confirmTick >= fadeMs;
     }
 
     /** Sets longPressed once the held duration reaches the timeout, once only. */
@@ -55,5 +78,7 @@ final class TouchPhase {
         y = 0;
         downMs = 0L;
         longPressed = false;
+        confirmed = false;
+        confirmTick = 0L;
     }
 }

@@ -814,3 +814,75 @@ fn repeated_press_on_same_node_keeps_clock_origin() {
     opu_renderer_free(a);
     opu_renderer_free(b);
 }
+
+#[test]
+fn confirm_release_keeps_press_until_cleared() {
+    let ir = ANIMATED_IR.as_bytes();
+    let empty = b"{}";
+    // Node 11 is a Button in the counter IR. Ink gating paints ripples only on
+    // Button-semantic nodes; a plain Text (e.g. node 7) only changes its state
+    // layer, which would mask the ripple lifecycle this test pins.
+    let button = 11u32;
+    // One fresh renderer per state: the incremental raster keeps a previous
+    // frame, so reusing a renderer across states is not byte-comparable.
+    let rendered = |ops: &[(u32, i64, i32)], elapsed: i64| -> Vec<u8> {
+        let handle = opu_renderer_new(WIDTH, HEIGHT);
+        assert!(!handle.is_null());
+        for &(node, tick, mode) in ops {
+            assert_eq!(
+                opu_renderer_set_press(handle, node, tick, -1, -1, mode),
+                OPU_OK
+            );
+        }
+        let mut out = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
+        assert_eq!(
+            opu_renderer_frame_at(
+                handle,
+                ir.as_ptr(),
+                ir.len(),
+                empty.as_ptr(),
+                empty.len(),
+                std::ptr::null(),
+                0,
+                elapsed,
+                out.as_mut_ptr(),
+                WIDTH,
+                HEIGHT,
+            ),
+            OPU_OK
+        );
+        opu_renderer_free(handle);
+        out
+    };
+
+    let baseline = rendered(&[], 200);
+    // A confirm with no open press cannot invent one.
+    assert_eq!(
+        rendered(&[(button, 200, 2)], 200),
+        baseline,
+        "confirm without a press"
+    );
+    // DOWN on the Button paints a ripple that alters the frame.
+    assert_ne!(rendered(&[(button, 0, 1)], 200), baseline, "down paints a ripple");
+    // CONFIRM keeps the press alive: at t=200 the confirmed radius is still
+    // visible (release at 100), so the frame differs from the unpressed one.
+    assert_ne!(
+        rendered(&[(button, 0, 1), (button, 100, 2)], 200),
+        baseline,
+        "confirm must not clear the press"
+    );
+    // Past confirm+375ms the confirmed ripple is gone while a held press still
+    // paints at peak alpha. This distinguishes a recorded confirm tick from a
+    // held press. The tick value itself is asserted in src/lib.rs unit tests.
+    assert_ne!(
+        rendered(&[(button, 0, 1), (button, 100, 2)], 600),
+        rendered(&[(button, 0, 1)], 600),
+        "confirmed ripple ends while a held press keeps painting"
+    );
+    // Only an explicit clear restores the exact unpressed bytes.
+    assert_eq!(
+        rendered(&[(button, 0, 1), (button, 100, 2), (0, 200, 0)], 200),
+        baseline,
+        "clear after confirm restores the frame"
+    );
+}

@@ -54,13 +54,28 @@ public final class TouchPhaseCheck {
         check(!p.markLongPressed(1000L + 499L, 500L), "before timeout is not long");
         check(p.markLongPressed(1000L + 500L, 500L), "at timeout is long");
         check(!p.markLongPressed(1000L + 900L, 500L), "long fires once only");
+
+        // CONFIRM keeps the press live through the fade window.
+        check(!p.isFading() && !p.fadeDone(2000L, 375L), "no fade before confirm");
+        p.confirm(2000L);
+        check(p.isPressed() && p.isFading(), "confirm keeps press and starts fade");
+        check(!p.fadeDone(2000L + 374L, 375L), "fade still active just before end");
+        check(p.fadeDone(2000L + 375L, 375L), "fade done at the window end");
+        p.confirm(9999L);
+        check(p.confirmTick == 2000L, "confirm is idempotent once");
+
         p.clear();
-        check(!p.isPressed() && p.node == TouchPhase.NO_NODE && !p.longPressed,
-            "up clears the press");
+        check(!p.isPressed() && p.node == TouchPhase.NO_NODE && !p.longPressed
+            && !p.isFading(), "up clears the press and fade");
 
         // A missed DOWN cannot become a long press.
         check(!p.down(TouchPhase.NO_NODE, 5, 6, 0L), "miss opens no press");
         check(!p.markLongPressed(5000L, 500L), "miss cannot long press");
+        check(!p.isFading(), "miss cannot fade");
+
+        // A new DOWN on the same node resets confirm state.
+        check(p.down(12, 1, 2, 7000L), "second down on same node");
+        check(!p.isFading() && p.confirmTick == 0L, "down resets confirm");
 
         System.out.println("TOUCH_PHASE_CHECKS_OK");
     }

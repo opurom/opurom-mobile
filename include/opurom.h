@@ -193,11 +193,13 @@ int32_t opu_text_spans_route(const uint8_t *ir_json, size_t ir_len,
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
 
 /*
- * Sets (on=1, node_id!=0) or clears (on=0 or node_id=0) the caller-owned press
- * phase: press_start_tick is the caller animation clock at touch down, touch_x/y
- * are absolute canvas coordinates of the press (either negative for the node
- * centre). Press frames go through the renderer's press path; frames without a
- * press are byte-identical to before. Never enters the state JSON or the IR.
+ * Drives the caller-owned press phase. on=1 (DOWN, node_id!=0) opens a press:
+ * press_start_tick is the caller clock at touch down, touch_x/y are absolute
+ * canvas coordinates (either negative for the node centre). on=2 (CONFIRM)
+ * keeps the press and stamps the same clock slot as its confirm tick, so the
+ * renderer accelerates the radius and fades out; it never clears. on=0 (or
+ * node_id=0) clears. Press frames use the renderer's press path; frames without
+ * a press are byte-identical. Never enters the state JSON or the IR.
  */
 int32_t opu_renderer_set_press(OpuRenderer *renderer, uint32_t node_id,
                                int64_t press_start_tick, int64_t touch_x, int64_t touch_y,

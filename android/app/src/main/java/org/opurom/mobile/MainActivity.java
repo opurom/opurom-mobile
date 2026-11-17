@@ -63,6 +63,13 @@ public final class MainActivity extends Activity {
     private static final int FRAME_STEP_MS = 16;
     private static final int ANIM_SETTLED_MS = 4000;
     private static final String PRESS_TAG = "OpuromPress";
+    // Confirm keeps the frame pump alive for the renderer's fade-out controller.
+    // Mirrors RIPPLE_FADE_OUT_MS in opurom-render's InkRipple timing.
+    private static final int PRESS_FADE_MS = 375;
+    // opu_renderer_set_press event kinds; C ABI signature is unchanged.
+    private static final int PRESS_CLEAR = 0;
+    private static final int PRESS_DOWN = 1;
+    private static final int PRESS_CONFIRM = 2;
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
@@ -132,14 +139,22 @@ public final class MainActivity extends Activity {
         public void doFrame(long frameTimeNanos) {
             host.pumpQueued = false;
             boolean held = host.press.isPressed();
-            if (!held && !host.animated) {
+            boolean fading = host.press.isFading();
+            if (!held && !fading && !host.animated) {
                 return;
             }
-            // While held the clock runs past settle so the ripple keeps advancing.
-            host.elapsedMs = held ? host.elapsedMs + FRAME_STEP_MS
+            // A confirmed release still needs frames: the renderer accelerates
+            // the radius to full and fades it out over PRESS_FADE_MS. Keep the
+            // caller clock advancing through that window, then clear the press.
+            if (fading && host.press.fadeDone(host.elapsedMs, PRESS_FADE_MS)) {
+                host.clearConfirmedPress();
+                fading = false;
+                held = false;
+            }
+            host.elapsedMs = (held || fading) ? host.elapsedMs + FRAME_STEP_MS
                     : Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
             host.renderFrame();
-            if (held || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
+            if (held || fading || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
                 host.pumpQueued = true;
                 Choreographer.getInstance().postFrameCallback(this);
             }
@@ -358,7 +373,7 @@ public final class MainActivity extends Activity {
                 rendererWidth, rendererHeight);
         press.down(node, x, y, SystemClock.uptimeMillis());
         Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
-        reportPressPhase(press, node != TouchPhase.NO_NODE, false);
+        reportPressPhase(press, node != TouchPhase.NO_NODE ? PRESS_DOWN : PRESS_CLEAR, false);
         if (node != TouchPhase.NO_NODE) {
             pressHandler.removeCallbacks(longPressCheck);
             pressHandler.postDelayed(longPressCheck,
@@ -366,19 +381,37 @@ public final class MainActivity extends Activity {
         }
     }
 
-    /** ACTION_UP/ACTION_CANCEL: close the press before the tap path runs. */
+    /**
+     * ACTION_UP confirms the press (ABI on=2) and leaves it live so the pump can
+     * draw the radius/fade finish. ACTION_CANCEL clears it at once (on=0): there
+     * is no cancel channel in the agreed ABI, so cancel takes the clear path.
+     */
     private void onPressUp(boolean cancelled) {
         pressHandler.removeCallbacks(longPressCheck);
-        boolean held = press.isPressed();
-        if (held) {
-            reportPressPhase(press, false, press.longPressed);
+        if (!press.isPressed()) {
+            Log.d(PRESS_TAG, "up cancelled=" + cancelled + " no press");
+            return;
         }
-        press.clear();
-        if (held) {
-            // One frame after release restores the unpressed look.
+        if (cancelled) {
+            reportPressPhase(press, PRESS_CLEAR, press.longPressed);
+            press.clear();
             renderFrame();
+        } else {
+            press.confirm(elapsedMs);
+            reportPressPhase(press, PRESS_CONFIRM, press.longPressed);
+            // The release tick rides in the setter's tick slot. Keep pumping:
+            // on=2 alone cannot draw frames, and the fade is not yet visible.
+            startPump();
         }
-        Log.d(PRESS_TAG, "up cancelled=" + cancelled);
+        Log.d(PRESS_TAG, "up cancelled=" + cancelled + " fade=" + press.isFading());
+    }
+
+    /** Clears a confirmed press once its fade window has elapsed. */
+    private void clearConfirmedPress() {
+        int node = press.node;
+        reportPressPhase(press, PRESS_CLEAR, press.longPressed);
+        press.clear();
+        Log.d(PRESS_TAG, "clear node=" + node + " tick=" + elapsedMs);
     }
 
     private void onLongPressTimeout() {
@@ -399,13 +432,14 @@ public final class MainActivity extends Activity {
      * (ANIMATION_AND_PHYSICS.md 8). The touch point is the ripple centre and
      * elapsedMs is the caller frame clock the ripple advances on.
      */
-    private void reportPressPhase(TouchPhase phase, boolean on, boolean longPressed) {
-        int status = OpuromNative.opuRendererSetPress(renderer, on ? phase.node : 0, elapsedMs,
-                phase.x, phase.y, on ? 1 : 0);
-        Log.d(PRESS_TAG, "phase node=" + phase.node + " on=" + on
+    private void reportPressPhase(TouchPhase phase, int mode, boolean longPressed) {
+        int node = mode == PRESS_CLEAR ? 0 : phase.node;
+        int status = OpuromNative.opuRendererSetPress(renderer, node, elapsedMs,
+                phase.x, phase.y, mode);
+        Log.d(PRESS_TAG, "phase node=" + phase.node + " on=" + mode
                 + " long=" + longPressed + " x=" + phase.x + " y=" + phase.y
                 + " status=" + status);
-        if (on) {
+        if (mode != PRESS_CLEAR) {
             // The ripple only moves while the frame clock runs.
             startPump();
         }
@@ -437,7 +471,9 @@ public final class MainActivity extends Activity {
         if (nav != null) {
             applyNav(nav);
         }
-        if (animated) {
+        // A confirmed press still owns the frame clock until its fade ends;
+        // resetting here would strand the confirm tick ahead of the clock.
+        if (animated && !press.isFading()) {
             elapsedMs = 0;
         }
         renderFrame();
@@ -538,8 +574,9 @@ public final class MainActivity extends Activity {
             OpuromNative.opuRendererSuppressText(renderer, true);
         }
         int status;
-        // Pressed frames need the caller clock so the ripple advances.
-        boolean clocked = animated || press.isPressed();
+        // Pressed or fading frames need the caller clock so the ripple advances
+        // through its confirm/fade controllers.
+        boolean clocked = animated || press.isPressed() || press.isFading();
         byte[] route = activeRoute == null ? null
                 : activeRoute.getBytes(StandardCharsets.UTF_8);
         if (renderer != 0 && clocked) {
@@ -597,7 +634,7 @@ public final class MainActivity extends Activity {
     }
 
     private void startPump() {
-        if ((!animated && !press.isPressed()) || pumpQueued) {
+        if ((!animated && !press.isPressed() && !press.isFading()) || pumpQueued) {
             return;
         }
         pumpQueued = true;
