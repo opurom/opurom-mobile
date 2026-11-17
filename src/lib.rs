@@ -18,8 +18,8 @@
 
 use opurom_core::{Event as CoreEvent, Patch as CorePatch, Runtime as CoreRuntime,
                   Value as CoreValue};
-use opurom_render::{hit, layout, parse_ir, parse_state_json, text_spans_for, Ir, Renderer,
-                    StateView, SETTLED_MS};
+use opurom_render::{hit, layout, layout_at, parse_ir, parse_state_json, text_spans_for, Frame,
+                    Ir, PressPhase, Renderer, StateView, SETTLED_MS};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -183,6 +183,32 @@ pub struct OpuRenderer {
     renderer: Renderer,
     width: u32,
     height: u32,
+    /// Caller-owned press phase; None keeps every frame byte-identical.
+    press: Option<PressPhase>,
+}
+
+impl OpuRenderer {
+    /// Renders one frame, honouring the press phase when one is set. Without a
+    /// press this is the exact incremental call, so default frames are unchanged.
+    fn render_at(&mut self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Frame {
+        match self.press_phase(ir, state, elapsed_ms) {
+            Some(p) => self.renderer.render_with_press(ir, state, elapsed_ms, Some(&p)),
+            None => self.renderer.render_incremental_at(ir, state, elapsed_ms),
+        }
+    }
+
+    /// The stored touch is absolute canvas coords; the ripple raster wants it
+    /// relative to the pressed node, so resolve the node rect here.
+    fn press_phase(&self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Option<PressPhase> {
+        let mut p = self.press?;
+        if let Some((x, y)) = p.touch {
+            p.touch = layout_at(ir, state, self.width, self.height, elapsed_ms)
+                .iter()
+                .find(|n| n.id == p.node_id)
+                .map(|n| (x - n.rect.x, y - n.rect.y));
+        }
+        Some(p)
+    }
 }
 
 /// Borrow one caller-owned JSON document. Lengths are bounded before any read so
@@ -251,6 +277,7 @@ pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer 
                 renderer,
                 width,
                 height,
+                press: None,
             }))
         },
         std::ptr::null_mut(),
@@ -333,8 +360,7 @@ pub extern "C" fn opu_renderer_frame(
                     Err(code) => return code,
                 };
             let frame = owned
-                .renderer
-                .render_incremental_at(&ir, &state, SETTLED_MS);
+                .render_at(&ir, &state, SETTLED_MS);
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
@@ -434,8 +460,51 @@ pub extern "C" fn opu_renderer_frame_route(
                 Err(code) => return code,
             };
             let frame = owned
-                .renderer
-                .render_incremental_at(&active, &state, SETTLED_MS);
+                .render_at(&active, &state, SETTLED_MS);
+            write_pixels(&frame.pixels, out, byte_len)
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Timed variant of `opu_renderer_frame_route`: renders `route`'s tree at an
+/// explicit caller-owned `elapsed_ms` so a host frame pump can play animations.
+/// Identical to `opu_renderer_frame_route` except the clock is caller-supplied
+/// instead of `SETTLED_MS`. Error codes match `opu_renderer_frame_route`.
+#[no_mangle]
+pub extern "C" fn opu_renderer_frame_at(
+    renderer: *mut OpuRenderer,
+    ir_json: *const u8,
+    ir_len: usize,
+    state_json: *const u8,
+    state_len: usize,
+    route: *const u8,
+    route_len: usize,
+    elapsed_ms: i64,
+    out: *mut u8,
+    width: u32,
+    height: u32,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            if (owned.width, owned.height) != (width, height) {
+                return OPU_ERR_DIMENSION;
+            }
+            let (ir, state, byte_len) =
+                match frame_inputs(ir_json, ir_len, state_json, state_len, out, width, height) {
+                    Ok(inputs) => inputs,
+                    Err(code) => return code,
+                };
+            let active = match route_str(route, route_len).and_then(|r| route_ir(&ir, r)) {
+                Ok(active) => active,
+                Err(code) => return code,
+            };
+            let frame = owned
+                .render_at(&active, &state, elapsed_ms.max(0));
             write_pixels(&frame.pixels, out, byte_len)
         },
         OPU_ERR_PANIC,
@@ -721,6 +790,45 @@ pub extern "C" fn opu_renderer_set_suppress_text(renderer: *mut OpuRenderer, on:
     )
 }
 
+/// Sets or clears the caller-owned press phase for a reusable renderer
+/// (ANIMATION_AND_PHYSICS.md §8): `on` with a non-zero `node_id` stores a
+/// press at `press_start_tick` with an absolute canvas `touch` (negative =
+/// ripple at the node centre); `on = 0` or `node_id = 0` clears it. Never
+/// touches the state JSON or the IR; frames without a press are unchanged.
+#[no_mangle]
+pub extern "C" fn opu_renderer_set_press(
+    renderer: *mut OpuRenderer,
+    node_id: u32,
+    press_start_tick: i64,
+    touch_x: i64,
+    touch_y: i64,
+    on: i32,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let owned = unsafe { &mut *renderer };
+            owned.press = if on != 0 && node_id != 0 {
+                Some(PressPhase {
+                    node_id,
+                    press_start_tick,
+                    touch: if touch_x >= 0 && touch_y >= 0 {
+                        Some((touch_x, touch_y))
+                    } else {
+                        None
+                    },
+                })
+            } else {
+                None
+            };
+            OPU_OK
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
 fn frame_suppressed_impl(
     ir_json: *const u8,
     ir_len: usize,
@@ -962,5 +1070,39 @@ mod tests {
             OPU_OK
         );
         assert_ne!(with_text, graphics, "suppressed frame must not paint bitmap text");
+    }
+
+    #[test]
+    fn frame_at_uses_the_caller_clock_to_play_animation() {
+        // A timed frame entry must honor elapsed_ms: the same renderer, IR and
+        // state produce different pixels at different clock positions, and the
+        // settled time matches the hardcoded-SETTLED_MS route entry.
+        let ir = include_bytes!("../android/app/src/main/assets/motion.opuir.json");
+        let empty = b"{}";
+        let (width, height) = (320u32, 240u32);
+        let len = (width * height * 4) as usize;
+        let renderer = opu_renderer_new(width, height);
+        assert!(!renderer.is_null());
+        let mut at0 = vec![0u8; len];
+        let mut at400 = vec![0u8; len];
+        let mut settled = vec![0u8; len];
+        assert_eq!(
+            opu_renderer_frame_at(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                  std::ptr::null(), 0, 0, at0.as_mut_ptr(), width, height),
+            OPU_OK
+        );
+        assert_eq!(
+            opu_renderer_frame_at(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                  std::ptr::null(), 0, 400, at400.as_mut_ptr(), width, height),
+            OPU_OK
+        );
+        assert_ne!(at0, at400, "elapsed_ms must change the rendered frame");
+        assert_eq!(
+            opu_renderer_frame_route(renderer, ir.as_ptr(), ir.len(), empty.as_ptr(), empty.len(),
+                                     std::ptr::null(), 0, settled.as_mut_ptr(), width, height),
+            OPU_OK
+        );
+        assert_eq!(at400, settled, "settled time must match the route entry");
+        opu_renderer_free(renderer);
     }
 }

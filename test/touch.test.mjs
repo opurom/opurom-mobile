@@ -22,13 +22,13 @@ test('the host draws only IR pixels and has no Java chrome', () => {
   assert.match(ACTIVITY, /static final class IrView extends View/);
   assert.match(ACTIVITY, /protected void onDraw\(Canvas canvas\)/);
   assert.match(ACTIVITY, /canvas\.drawBitmap\(frame, null,/);
-  assert.match(ACTIVITY, /FLAG_FULLSCREEN/);
+  assert.ok(!ACTIVITY.includes('FLAG_FULLSCREEN'), 'status bar stays visible');
   for (const widget of ['TextView', 'ImageView', 'LinearLayout', 'ScrollView', 'Button']) {
     assert.ok(!ACTIVITY.includes(widget), `${widget} must not appear in the host`);
   }
   assert.ok(!/setBackgroundColor\(|setPadding\(|GradientDrawable/.test(ACTIVITY),
     'no Java-owned colours or padding');
-  assert.ok(!/Typeface\.create\(/.test(ACTIVITY), 'no authored font family');
+  assert.ok(!/createFromAsset|createFromFile/.test(ACTIVITY), 'no authored font file');
 });
 
 test('touch coordinates flow through hit test into tap dispatch', () => {
@@ -38,6 +38,31 @@ test('touch coordinates flow through hit test into tap dispatch', () => {
   assert.match(ACTIVITY, /OpuromNative\.opuTapNode\(graphicsIr, stateJson, node, out\)/);
   assert.match(ACTIVITY, /stateJson = trim\(out\)/);
   assert.match(ACTIVITY, /view\.invalidate\(\)/);
+});
+
+test('press phase is captured on DOWN and released on UP or CANCEL', () => {
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_DOWN/);
+  assert.match(ACTIVITY, /MotionEvent\.ACTION_CANCEL/);
+  assert.match(ACTIVITY, /host\.onPressDown\(event\.getX\(\), event\.getY\(\)\)/);
+  assert.match(ACTIVITY, /host\.onPressUp\(false\)/);
+  assert.match(ACTIVITY, /host\.onPressUp\(true\)/);
+  assert.match(ACTIVITY, /ViewConfiguration\.getLongPressTimeout\(\)/);
+  assert.match(ACTIVITY, /TouchPhase\.toCanvas\(screenX, frameScaleX\)/);
+  assert.match(ACTIVITY, /private void reportPressPhase\(TouchPhase phase/);
+  const seams = ACTIVITY.match(/private void reportPressPhase\(/g) || [];
+  assert.equal(seams.length, 1, 'the renderer press seam is a single function');
+});
+
+test('the press phase reaches the renderer through the setter ABI', () => {
+  assert.match(ACTIVITY,
+    /OpuromNative\.opuRendererSetPress\(renderer, on \? phase\.node : 0, elapsedMs,/);
+  assert.match(JAVA, /native int opuRendererSetPress\(/);
+  assert.ok(SHIM.includes('Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'));
+  assert.ok(VERIFY.includes("'Java_org_opurom_mobile_OpuromNative_opuRendererSetPress'"));
+  assert.ok(ABI.includes('opu_renderer_set_press('));
+  assert.match(RUST, /pub extern "C" fn opu_renderer_set_press\(/);
+  assert.ok(VERIFY.includes("'opu_renderer_set_press'"));
+  assert.ok(!ACTIVITY.includes('shortcut: render-side press ABI'), 'the seam is wired, not stubbed');
 });
 
 test('the hit and tap ABI resolves through Java, C and Rust', () => {

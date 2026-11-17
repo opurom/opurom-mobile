@@ -10,10 +10,16 @@ import android.graphics.Typeface;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.TextUtils.TruncateAt;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -53,6 +59,10 @@ public final class MainActivity extends Activity {
     // the native release kernel keeps it within budget; drawBitmap is 1:1.
     private static final int MAX_FRAME_PIXELS = 2400;
     private static final String TOUCH_TAG = "OpuromTouch";
+    // A0 frame pump: caller-owned fixed-step clock, no wall clock, no new opt-in flag.
+    private static final int FRAME_STEP_MS = 16;
+    private static final int ANIM_SETTLED_MS = 4000;
+    private static final String PRESS_TAG = "OpuromPress";
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
@@ -76,13 +86,64 @@ public final class MainActivity extends Activity {
     // renderFrame; read-only afterwards until the next frame.
     private float frameScaleX = 1f;
     private float frameScaleY = 1f;
+    // Opt-in animation state. The pump runs only when the loaded IR declares an
+    // animation property; otherwise renderFrame keeps the exact SETTLED path.
+    private boolean animated;
+    private int elapsedMs;
+    private boolean pumpQueued;
+    private final FramePump framePump = new FramePump(this);
+    // Caller-owned press phase; never written into stateJson or the IR.
+    private final TouchPhase press = new TouchPhase();
+    private final Handler pressHandler = new Handler(Looper.getMainLooper());
+    private final LongPressCheck longPressCheck = new LongPressCheck(this);
+
+    /** Marks longPressed after the platform timeout while the same node is held. */
+    static final class LongPressCheck implements Runnable {
+        private final MainActivity host;
+
+        LongPressCheck(MainActivity host) {
+            this.host = host;
+        }
+
+        @Override
+        public void run() {
+            host.onLongPressTimeout();
+        }
+    }
+
+    /** Fixed-step animation clock; a named class keeps d8 dexing simple. */
+    static final class FramePump implements Choreographer.FrameCallback {
+        private final MainActivity host;
+
+        FramePump(MainActivity host) {
+            this.host = host;
+        }
+
+        @Override
+        public void doFrame(long frameTimeNanos) {
+            host.pumpQueued = false;
+            boolean held = host.press.isPressed();
+            if (!held && !host.animated) {
+                return;
+            }
+            // While held the clock runs past settle so the ripple keeps advancing.
+            host.elapsedMs = held ? host.elapsedMs + FRAME_STEP_MS
+                    : Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
+            host.renderFrame();
+            if (held || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
+                host.pumpQueued = true;
+                Choreographer.getInstance().postFrameCallback(this);
+            }
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         live = this;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // Status bar stays visible, matching the golden captures. Content is
+        // laid out below it; the three layers share view-relative coordinates.
         dark = (getResources().getConfiguration().uiMode
                 & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
                 == android.content.res.Configuration.UI_MODE_NIGHT_YES;
@@ -100,6 +161,7 @@ public final class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         setContentView(root);
         view.post(this::renderFrame);
+        view.post(this::startPump);
     }
 
     /** The only view in the app: draws IR pixels and maps touches back to IR nodes. */
@@ -126,11 +188,21 @@ public final class MainActivity extends Activity {
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            if (event.getAction() == MotionEvent.ACTION_UP) {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                host.onPressDown(event.getX(), event.getY());
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP) {
+                host.onPressUp(false);
                 host.onTap(event.getX(), event.getY());
                 return true;
             }
-            return event.getAction() == MotionEvent.ACTION_DOWN;
+            if (action == MotionEvent.ACTION_CANCEL) {
+                host.onPressUp(true);
+                return true;
+            }
+            return false;
         }
     }
 
@@ -142,6 +214,8 @@ public final class MainActivity extends Activity {
     static final class TextLayerView extends View {
         private final MainActivity host;
         private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        // Cached so per-span weight switching never allocates; DEFAULT is reset each span.
+        private final Typeface boldTypeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
         private JSONArray spans = new JSONArray();
 
         TextLayerView(MainActivity host) {
@@ -190,8 +264,19 @@ public final class MainActivity extends Activity {
                     paint.setColor(Color.argb(color.optInt(3, 255), color.optInt(0, 0),
                             color.optInt(1, 0), color.optInt(2, 0)));
                 }
-                float textSize = 7f * Math.max(1, span.optInt("size", 1)) * scaleY;
+                // fontPx is an exact logical size; absent falls back to the raster 7*size.
+                int fontPx = span.optInt("fontPx", 0);
+                float logicalSize = fontPx > 0 ? fontPx : 7f * Math.max(1, span.optInt("size", 1));
+                float textSize = logicalSize * scaleY;
                 paint.setTextSize(textSize);
+                // Reset every span so a bold/spaced run cannot bleed into the next.
+                paint.setTypeface("bold".equals(span.optString("weight", ""))
+                        ? boldTypeface : Typeface.DEFAULT);
+                // letterSpacing is logical px; Paint.setLetterSpacing takes ems.
+                // shortcut: below API 28 letter spacing is skipped, default kept.
+                if (Build.VERSION.SDK_INT >= 28) {
+                    paint.setLetterSpacing(span.optInt("letterSpacing", 0) / logicalSize);
+                }
                 String align = span.optString("align", "start");
                 JSONArray origin = span.optJSONArray("origin");
                 boolean hasOrigin = origin != null && origin.length() == 2;
@@ -252,6 +337,67 @@ public final class MainActivity extends Activity {
         }
     }
 
+    /** ACTION_DOWN: hit-test the touch point and open the caller-owned press phase. */
+    private void onPressDown(float screenX, float screenY) {
+        if (lastFrame == null || rendererWidth <= 0 || view.getWidth() <= 0
+                || view.getHeight() <= 0) {
+            return;
+        }
+        int x = TouchPhase.toCanvas(screenX, frameScaleX);
+        int y = TouchPhase.toCanvas(screenY, frameScaleY);
+        int node = OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
+                rendererWidth, rendererHeight);
+        press.down(node, x, y, SystemClock.uptimeMillis());
+        Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
+        reportPressPhase(press, node != TouchPhase.NO_NODE, false);
+        if (node != TouchPhase.NO_NODE) {
+            pressHandler.removeCallbacks(longPressCheck);
+            pressHandler.postDelayed(longPressCheck,
+                    ViewConfiguration.getLongPressTimeout());
+        }
+    }
+
+    /** ACTION_UP/ACTION_CANCEL: close the press before the tap path runs. */
+    private void onPressUp(boolean cancelled) {
+        pressHandler.removeCallbacks(longPressCheck);
+        boolean held = press.isPressed();
+        if (held) {
+            reportPressPhase(press, false, press.longPressed);
+        }
+        press.clear();
+        if (held) {
+            // One frame after release restores the unpressed look.
+            renderFrame();
+        }
+        Log.d(PRESS_TAG, "up cancelled=" + cancelled);
+    }
+
+    private void onLongPressTimeout() {
+        if (press.isPressed()
+                && press.markLongPressed(SystemClock.uptimeMillis(),
+                        ViewConfiguration.getLongPressTimeout())) {
+            Log.d(PRESS_TAG, "long node=" + press.node);
+            reportPressPhase(press, true, true);
+        }
+    }
+
+    /**
+     * Single seam feeding the caller-owned press phase to the renderer
+     * (ANIMATION_AND_PHYSICS.md 8). The touch point is the ripple centre and
+     * elapsedMs is the caller frame clock the ripple advances on.
+     */
+    private void reportPressPhase(TouchPhase phase, boolean on, boolean longPressed) {
+        int status = OpuromNative.opuRendererSetPress(renderer, on ? phase.node : 0, elapsedMs,
+                phase.x, phase.y, on ? 1 : 0);
+        Log.d(PRESS_TAG, "phase node=" + phase.node + " on=" + on
+                + " long=" + longPressed + " x=" + phase.x + " y=" + phase.y
+                + " status=" + status);
+        if (on) {
+            // The ripple only moves while the frame clock runs.
+            startPump();
+        }
+    }
+
     /** Maps a screen coordinate into the render viewport, then dispatches a tap. */
     private void onTap(float screenX, float screenY) {
         if (lastFrame == null || rendererWidth <= 0 || view.getWidth() <= 0
@@ -273,7 +419,11 @@ public final class MainActivity extends Activity {
             return;
         }
         stateJson = trim(out);
+        if (animated) {
+            elapsedMs = 0;
+        }
         renderFrame();
+        startPump();
     }
 
     private static byte[] trim(byte[] data) {
@@ -315,11 +465,19 @@ public final class MainActivity extends Activity {
         if (renderer != 0) {
             OpuromNative.opuRendererSuppressText(renderer, true);
         }
-        int status = renderer != 0
-                ? OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
-                        null, pixels, width, height)
-                : OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
-                        pixels, width, height);
+        int status;
+        // Pressed frames need the caller clock so the ripple advances.
+        boolean clocked = animated || press.isPressed();
+        if (renderer != 0 && clocked) {
+            status = OpuromNative.opuRendererFrameAt(renderer, graphicsIr, stateJson, null,
+                    elapsedMs, pixels, width, height);
+        } else if (renderer != 0) {
+            status = OpuromNative.opuRendererFrameRoute(renderer, graphicsIr, stateJson,
+                    null, pixels, width, height);
+        } else {
+            status = OpuromNative.opuFrameSuppressed(graphicsIr, stateJson,
+                    pixels, width, height);
+        }
         if (status != OpuromNative.OK) {
             throw new IllegalStateException("frame render failed with status " + status);
         }
@@ -347,6 +505,23 @@ public final class MainActivity extends Activity {
     private void applyIr(byte[] ir) {
         graphicsIr = ir;
         stateJson = "{}".getBytes(StandardCharsets.UTF_8);
+        elapsedMs = 0;
+        animated = declaresAnimation(ir);
+    }
+
+    /** Opt-in: an IR carrying a timing property drives the fixed-step frame pump. */
+    private static boolean declaresAnimation(byte[] ir) {
+        String text = new String(ir, StandardCharsets.UTF_8);
+        return text.contains("\"animate\"") || text.contains("\"animClock\"")
+                || text.contains("\"duration\"");
+    }
+
+    private void startPump() {
+        if ((!animated && !press.isPressed()) || pumpQueued) {
+            return;
+        }
+        pumpQueued = true;
+        Choreographer.getInstance().postFrameCallback(framePump);
     }
 
     /** Reload hook used by the dev CLI; keeps the warm process and state. */
@@ -359,6 +534,7 @@ public final class MainActivity extends Activity {
             byte[] ir = java.nio.file.Files.readAllBytes(file.toPath());
             activity.applyIr(resolveFontMetrics(resolveSystemMode(ir, activity.dark)));
             activity.renderFrame();
+            activity.startPump();
             return true;
         } catch (IOException error) {
             return false;

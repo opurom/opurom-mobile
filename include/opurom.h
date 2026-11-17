@@ -114,6 +114,18 @@ int32_t opu_renderer_frame_route(OpuRenderer *renderer,
                                  uint8_t *out, uint32_t width, uint32_t height);
 
 /*
+ * Timed variant of opu_renderer_frame_route: renders at a caller-owned elapsed_ms
+ * so a host frame pump can play animations. Same contract and error codes; the
+ * clock is caller-supplied instead of settled. Negative elapsed_ms is clamped to 0.
+ */
+int32_t opu_renderer_frame_at(OpuRenderer *renderer,
+                              const uint8_t *ir_json, size_t ir_len,
+                              const uint8_t *state_json, size_t state_len,
+                              const uint8_t *route, size_t route_len,
+                              int64_t elapsed_ms,
+                              uint8_t *out, uint32_t width, uint32_t height);
+
+/*
  * Writes the IR's initial page key into out (UTF-8, not NUL-terminated) and returns the number of
  * bytes written, or 0 when the IR is single-page, has no initialRoute, or cannot be parsed.
  * out_capacity bounds the write; a key longer than the buffer returns 0.
@@ -168,6 +180,17 @@ int32_t opu_text_spans(const uint8_t *ir_json, size_t ir_len,
 
 /* Opt-in graphics-only raster. Default frames keep their bitmap text. */
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
+
+/*
+ * Sets (on=1, node_id!=0) or clears (on=0 or node_id=0) the caller-owned press
+ * phase: press_start_tick is the caller animation clock at touch down, touch_x/y
+ * are absolute canvas coordinates of the press (either negative for the node
+ * centre). Press frames go through the renderer's press path; frames without a
+ * press are byte-identical to before. Never enters the state JSON or the IR.
+ */
+int32_t opu_renderer_set_press(OpuRenderer *renderer, uint32_t node_id,
+                               int64_t press_start_tick, int64_t touch_x, int64_t touch_y,
+                               int32_t on);
 
 int32_t opu_frame_from_ir_suppressed(const uint8_t *ir_json, size_t ir_len,
                                      const uint8_t *state_json, size_t state_len,

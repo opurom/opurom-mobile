@@ -8,6 +8,7 @@ use std::ptr;
 use std::time::Instant;
 
 const TODO_IR: &str = include_str!("../android/app/src/main/assets/todo.opuir.json");
+const ANIMATED_IR: &str = include_str!("../android/app/src/main/assets/counter.opuir.json");
 const WIDTH: u32 = 320;
 const HEIGHT: u32 = 240;
 // The Todo label is wider than 320px at size 20, so state only changes pixels
@@ -500,6 +501,112 @@ fn single_page_ir_ignores_route_and_matches_legacy() {
         0,
         "single-page IR has no initialRoute"
     );
+}
+
+#[test]
+fn timed_frame_at_advances_animation_clock() {
+    // A caller-owned clock must reach the renderer: the same IR/state/viewport
+    // rendered at t=0 and t=400 differs only because elapsed_ms is an input.
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let mut early = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let mut late = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let render_at = |elapsed_ms: i64, out: &mut [u8]| {
+        opu_renderer_frame_at(
+            handle,
+            ANIMATED_IR.as_ptr(),
+            ANIMATED_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            ptr::null(),
+            0,
+            elapsed_ms,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(render_at(0, &mut early), OPU_OK);
+    assert_eq!(render_at(400, &mut late), OPU_OK);
+    assert_ne!(early, late, "t=0 and t=400 must render different pixels");
+    opu_renderer_free(handle);
+}
+
+#[test]
+fn press_phase_changes_pixels_and_clears_byte_identically() {
+    // ANIMATION_AND_PHYSICS.md section 8: a press is a caller-owned phase; a
+    // press frame differs from the default, and clearing it restores the exact
+    // default bytes (golden safety). The touch point starts inside the ripple
+    // window so the frame at SETTLED carries a visible press.
+    let handle = opu_renderer_new(WIDTH, HEIGHT);
+    assert!(!handle.is_null());
+    let mut out = vec![0u8; WIDTH as usize * HEIGHT as usize * 4];
+    let default_frame = |out: &mut [u8]| {
+        opu_renderer_frame(
+            handle,
+            ANIMATED_IR.as_ptr(),
+            ANIMATED_IR.len(),
+            b"{}".as_ptr(),
+            2,
+            out.as_mut_ptr(),
+            WIDTH,
+            HEIGHT,
+        )
+    };
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    let baseline = out.clone();
+
+    // A press 100 ms before the settled tick still paints ripple progress.
+    let mut pressed = false;
+    'find: for y in (8..HEIGHT as i64).step_by(24) {
+        for x in (8..WIDTH as i64).step_by(24) {
+            let node = opu_hit_test(
+                ANIMATED_IR.as_ptr(),
+                ANIMATED_IR.len(),
+                b"{}".as_ptr(),
+                2,
+                x as i32,
+                y as i32,
+                WIDTH,
+                HEIGHT,
+            );
+            if node == 0 {
+                continue;
+            }
+            assert_eq!(
+                opu_renderer_set_press(handle, node, SETTLED_MS - 100, x, y, 1),
+                OPU_OK
+            );
+            assert_eq!(default_frame(&mut out), OPU_OK);
+            if out != baseline {
+                pressed = true;
+                break 'find;
+            }
+        }
+    }
+    assert!(pressed, "an active press must alter the default frame");
+
+    // Clearing through either contract condition restores the exact bytes.
+    assert_eq!(
+        opu_renderer_set_press(handle, 0, SETTLED_MS - 100, 1, 1, 1),
+        OPU_OK,
+        "node_id 0 means no press"
+    );
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    assert_eq!(out, baseline, "cleared press restores the default frame");
+    opu_renderer_set_press(handle, 1, SETTLED_MS - 100, 1, 1, 1);
+    assert_eq!(
+        opu_renderer_set_press(handle, 1, 0, 1, 1, 0),
+        OPU_OK
+    );
+    assert_eq!(default_frame(&mut out), OPU_OK);
+    assert_eq!(out, baseline, "on=0 restores the default frame");
+    assert_eq!(
+        opu_renderer_set_press(std::ptr::null_mut(), 1, 0, 1, 1, 1),
+        OPU_ERR_NULL,
+        "a null renderer is rejected"
+    );
+    opu_renderer_free(handle);
 }
 
 #[test]
