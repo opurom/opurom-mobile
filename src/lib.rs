@@ -22,7 +22,7 @@ use opurom_core::{
 use opurom_render::{
     hit, layout, layout_at, parse_ir, parse_state_json, tap_hit_rect, text_spans_for, Frame,
     Gesture, GestureEngine, GestureKind, Ir, Node, NodeState, PointerEvent, PointerKind,
-    PressPhase, Rect, Renderer, StateView, SETTLED_MS,
+    PressPhase, Renderer, StateView, SETTLED_MS,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
@@ -282,6 +282,8 @@ pub struct OpuRenderer {
     /// Caller-owned read-only node-state table; empty keeps every frame
     /// byte-identical to the static path. Pointer/focus events update it.
     node_states: Vec<(u32, NodeState)>,
+    /// True when the previous frame used the host-state full-raster path.
+    node_states_sampled_last: bool,
     /// Last parsed IR keyed by (content hash, route). Press frames reuse it;
     /// a changed IR or route invalidates it. State is never cached (small).
     ir_cache: Option<([u64; 3], Option<String>, Ir, Vec<u8>)>,
@@ -332,11 +334,32 @@ impl OpuRenderer {
     /// Renders one frame, honouring the caller-owned press phase and node-state
     /// table. With neither set this is the exact incremental static path.
     fn render_at(&mut self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Frame {
+        // A prior host-state frame may leave an incremental draft buffer whose
+        // layout key is identical to the now-cleared static frame. Take one
+        // full pass to return to the canonical authored frame.
+        if self.node_states_sampled_last && self.node_states.is_empty() && self.press.is_none() {
+            self.node_states_sampled_last = false;
+            return self.renderer.render_at(ir, state, elapsed_ms);
+        }
+        self.node_states_sampled_last = !self.node_states.is_empty() || self.press.is_some();
         match (self.press, self.node_states.as_slice()) {
             (None, []) => self.renderer.render_incremental_at(ir, state, elapsed_ms),
-            (None, states) => self
-                .renderer
-                .render_with_node_states(ir, state, elapsed_ms, Some(states)),
+            (None, states) => {
+                // Host state changes can end an animation track with only a
+                // paint payload delta. That is presentation state, deliberately
+                // invisible to the incremental layout key, so take a full
+                // raster while a node-state table is active.
+                let mut laid = opurom_render::layout_animated_at(
+                    ir,
+                    state,
+                    self.width,
+                    self.height,
+                    elapsed_ms,
+                    &mut opurom_render::anim_for_abi(&mut self.renderer),
+                );
+                opurom_render::apply_node_states_for_abi(&mut laid, ir, states);
+                opurom_render::render_laid_for_abi(&mut self.renderer, &laid, ir)
+            }
             (Some(press), []) => {
                 let p = self.press_phase(ir, state, elapsed_ms).unwrap_or(press);
                 self.renderer
@@ -498,6 +521,7 @@ pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer 
                 height,
                 press: None,
                 node_states: Vec::new(),
+                node_states_sampled_last: false,
                 ir_cache: None,
                 gesture: GestureEngine::new(),
                 gesture_key: None,
@@ -1559,6 +1583,7 @@ pub extern "C" fn opu_frame_from_ir_suppressed(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opurom_render::Rect;
 
     #[test]
     fn set_press_new_down_restarts_clock_and_confirm_records_tick() {
