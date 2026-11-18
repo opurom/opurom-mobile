@@ -78,7 +78,7 @@ test('a confirmed release keeps pumping until the press fade completes', () => {
   // Every pump/clock gate must treat a fading press as active.
   assert.match(ACTIVITY, /boolean fading = host\.press\.isFading\(\)/);
   assert.match(ACTIVITY, /if \(!held && !fading && !host\.animated\)/);
-  assert.match(ACTIVITY, /host\.elapsedMs = \(held \|\| fading\)/);
+  assert.match(ACTIVITY, /host\.elapsedMs = \(int\) Math\.min\(Integer\.MAX_VALUE, \(held \|\| fading\)/);
   assert.match(ACTIVITY, /if \(held \|\| fading \|\| \(host\.animated/);
   assert.match(ACTIVITY, /animated \|\| press\.isPressed\(\) \|\| press\.isFading\(\)/);
   assert.match(ACTIVITY, /!animated && !press\.isPressed\(\) && !press\.isFading\(\)/);

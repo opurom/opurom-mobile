@@ -37,6 +37,8 @@ test('three ABI functions resolve through Java, JNI, headers and verify', () => 
     ['opuRendererPointer', 'opu_renderer_pointer'],
     ['opuRendererNextDeadlineMs', 'opu_renderer_next_deadline_ms'],
     ['opuRendererTick', 'opu_renderer_tick'],
+    ['opuRendererTickAt', 'opu_renderer_tick_at'],
+    ['opuRendererFrameTimeNanos', 'opu_renderer_frame_time_nanos'],
   ]) {
     assert.match(JAVA, new RegExp(`native .* ${javaName}\\\(`), `${javaName} declared in Java`);
     const symbol = `Java_org_opurom_mobile_OpuromNative_${javaName}`;
@@ -49,15 +51,21 @@ test('three ABI functions resolve through Java, JNI, headers and verify', () => 
   }
 });
 
-test('Android feeds logical pointer/tick events from the frame pump, never wall time', () => {
-  assert.match(ACTIVITY, /host\.runGestureTicks\(\);/);
+test('Android feeds monotonic vsync-derived ticks from the frame pump', () => {
+  assert.match(ACTIVITY, /host\.runGestureTicks\(frameTimeNanos\);/);
+  assert.match(ACTIVITY, /OpuromNative\.opuRendererTickAt\(renderer, frameTimeNanos, tick, gestureOut\)/);
+  assert.match(ACTIVITY, /FrameClock\.elapsedMs\(frameTimeNanos, host\.lastFrameNanos\)/);
+  assert.match(ACTIVITY, /FrameClock\.tickMs\(frameTimeNanos,\s*host\.gestureOriginNanos/);
+  assert.ok(!ACTIVITY.includes('FRAME_STEP_MS'), 'no fixed-step host accumulation');
+  assert.ok(!/SystemClock\.uptimeMillis/.test(ACTIVITY), 'no wall clock in the host gesture path');
+});
+
+test('multi-pointer dispatch still feeds the same logical clock', () => {
   assert.match(ACTIVITY, /OpuromNative\.opuRendererPointer\(renderer, kind, pointerId, node,/);
   assert.match(ACTIVITY, /OpuromNative\.opuRendererNextDeadlineMs\(renderer\)/);
-  assert.match(ACTIVITY, /OpuromNative\.opuRendererTick\(renderer, tick, gestureOut\)/);
   assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_DOWN, nativeId, node,/);
   assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_MOVE, nativeId,/);
   assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_UP, nativeId,/);
   assert.match(ACTIVITY, /reportGesturePointer\(OpuromNative\.POINTER_CANCEL, pointerIds\.valueAt\(i\),/);
   assert.match(ACTIVITY, /press\.markLongPressed\(tick, LONG_PRESS_MS\)/);
-  assert.ok(!/SystemClock\.uptimeMillis/.test(ACTIVITY), 'no wall clock in the host gesture path');
 });

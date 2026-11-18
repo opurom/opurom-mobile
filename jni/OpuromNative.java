@@ -177,6 +177,13 @@ public final class OpuromNative {
     /** Advance the gesture arena; equal or older ticks return {@link #ERR_TIME}. */
     public static native int opuRendererTick(long renderer, long tMs, long[] out);
 
+    /** Real vsync tick: raw Choreographer nanos plus the caller-owned logical ms. */
+    public static native int opuRendererTickAt(long renderer, long frameTimeNanos,
+                                               long tMs, long[] out);
+
+    /** Last raw vsync nanos delivered to the arena, or -1. */
+    public static native long opuRendererFrameTimeNanos(long renderer);
+
     /** One-shot multi-page render; see {@link #opuRendererFrameRoute}. */
     public static native int opuFrameFromIrRoute(byte[] irJson, byte[] stateJson, byte[] route,
                                                  byte[] out, int width, int height);

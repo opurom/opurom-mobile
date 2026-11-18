@@ -94,6 +94,13 @@ JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererNextDeadl
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTick(
     JNIEnv *env, jclass clazz, jlong renderer, jlong t_ms, jlongArray out);
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTickAt(
+    JNIEnv *env, jclass clazz, jlong renderer, jlong frame_time_nanos, jlong t_ms,
+    jlongArray out);
+
+JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameTimeNanos(
+    JNIEnv *env, jclass clazz, jlong renderer);
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuFrameFromIrRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray state, jbyteArray route, jbyteArray out,
     jint width, jint height);

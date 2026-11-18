@@ -227,6 +227,10 @@ int32_t opu_renderer_pointer(OpuRenderer *renderer, const OpuPointerEvent *event
                              OpuGesture *out);
 int64_t opu_renderer_next_deadline_ms(OpuRenderer *renderer);
 int32_t opu_renderer_tick(OpuRenderer *renderer, int64_t t_ms, OpuGesture *out);
+/* Real vsync tick: raw Choreographer timestamp plus the same logical t_ms. */
+int32_t opu_renderer_tick_at(OpuRenderer *renderer, int64_t frame_time_nanos,
+                             int64_t t_ms, OpuGesture *out);
+int64_t opu_renderer_frame_time_nanos(OpuRenderer *renderer);
 
 /* Opt-in graphics-only raster. Default frames keep their bitmap text. */
 int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);

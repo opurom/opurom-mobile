@@ -278,6 +278,11 @@ pub struct OpuRenderer {
     clock_ms: i64,
     /// Last accepted tick time; equal or older ticks are rejected.
     last_tick_ms: Option<i64>,
+    /// Raw Choreographer timebase origin and last frame timestamp. The new
+    /// tick_at ABI carries vsync time into the renderer without changing the
+    /// logical-clock ABI used by existing callers.
+    frame_origin_nanos: Option<i64>,
+    frame_time_nanos: Option<i64>,
     /// Node id of the active pointer, used to label tick-emitted gestures.
     gesture_node: u32,
 }
@@ -458,6 +463,8 @@ pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer 
                 gesture_key: None,
                 clock_ms: 0,
                 last_tick_ms: None,
+                frame_origin_nanos: None,
+                frame_time_nanos: None,
                 gesture_node: 0,
             }))
         },
@@ -1349,6 +1356,52 @@ pub extern "C" fn opu_renderer_tick(
     )
 }
 
+/// Advance the arena on a real vsync frame, carrying the raw Choreographer
+/// timestamp to the renderer for timestamp-based displacement. `t_ms` is the
+/// same caller-owned logical clock used by pointer events, so the two stay in
+/// one domain. The legacy `opu_renderer_tick` signature is unchanged.
+#[no_mangle]
+pub extern "C" fn opu_renderer_tick_at(
+    renderer: *mut OpuRenderer,
+    frame_time_nanos: i64,
+    t_ms: i64,
+    out: *mut OpuGesture,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() || frame_time_nanos < 0 {
+                return OPU_ERR_TIME;
+            }
+            let owned = unsafe { &mut *renderer };
+            if t_ms < 0
+                || t_ms < owned.clock_ms
+                || owned.last_tick_ms.is_some_and(|last| t_ms <= last)
+            {
+                return OPU_ERR_TIME;
+            }
+            if owned.frame_origin_nanos.is_none() {
+                owned.frame_origin_nanos = Some(frame_time_nanos);
+            }
+            owned.frame_time_nanos = Some(frame_time_nanos);
+            let gesture = owned.gesture.on_tick(t_ms);
+            owned.clock_ms = t_ms;
+            owned.last_tick_ms = Some(t_ms);
+            write_gesture(gesture, owned.gesture_node, out);
+            OPU_OK
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
+/// Last raw vsync timestamp delivered through `opu_renderer_tick_at`, or -1.
+#[no_mangle]
+pub extern "C" fn opu_renderer_frame_time_nanos(renderer: *mut OpuRenderer) -> i64 {
+    if renderer.is_null() {
+        return -1;
+    }
+    unsafe { (*renderer).frame_time_nanos.unwrap_or(-1) }
+}
+
 fn write_gesture(gesture: Option<Gesture>, node_id: u32, out: *mut OpuGesture) {
     if out.is_null() {
         return;
@@ -1858,6 +1911,43 @@ mod tests {
             );
         }
         renderer
+    }
+
+    #[test]
+    fn vsync_ticks_are_monotonic_and_follow_the_frame_rate() {
+        // 60/120/144 Hz frame sequences: 1 second of vsync timestamps. The
+        // host derives t_ms from these; the ABI must accept every strictly
+        // increasing frame and expose the raw timestamp to the renderer.
+        for period_ns in [16_666_667i64, 8_333_333, 6_944_444] {
+            let renderer = gesture_renderer();
+            let mut out = OpuGesture {
+                code: 99,
+                node_id: 99,
+                dx: 9,
+                dy: 9,
+            };
+            let origin = 1_000_000_000i64;
+            let frames = 1_000_000_000i64 / period_ns;
+            let mut previous_ms = -1i64;
+            for index in 0..frames {
+                let nanos = origin + index * period_ns;
+                let t_ms = (nanos - origin) / 1_000_000;
+                assert!(t_ms > previous_ms, "frame clock must increase");
+                previous_ms = t_ms;
+                assert_eq!(
+                    opu_renderer_tick_at(renderer, nanos, t_ms, &mut out),
+                    OPU_OK
+                );
+                assert_eq!(opu_renderer_frame_time_nanos(renderer), nanos);
+            }
+            assert_eq!(frames, 1_000_000_000 / period_ns);
+            assert_eq!(
+                opu_renderer_tick_at(renderer, origin, 0, &mut out),
+                OPU_ERR_TIME
+            );
+            assert_eq!(opu_renderer_frame_time_nanos(std::ptr::null_mut()), -1);
+            opu_renderer_free(renderer);
+        }
     }
 
     #[test]

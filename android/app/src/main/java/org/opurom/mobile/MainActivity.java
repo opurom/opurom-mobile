@@ -57,7 +57,6 @@ public final class MainActivity extends Activity {
     private static final int MAX_FRAME_PIXELS = 2400;
     private static final String TOUCH_TAG = "OpuromTouch";
     // A0 frame pump: caller-owned fixed-step clock, no wall clock, no new opt-in flag.
-    private static final int FRAME_STEP_MS = 16;
     private static final int LONG_PRESS_MS = 500;
     private static final int ANIM_SETTLED_MS = 4000;
     private static final String PRESS_TAG = "OpuromPress";
@@ -106,6 +105,11 @@ public final class MainActivity extends Activity {
     private int elapsedMs;
     // Monotonic caller clock for the gesture ABI; never reset by animation patches.
     private long gestureClockMs;
+    // Vsync timebase: elapsedMs advances by real frame deltas, the gesture
+    // clock by monotonic wall time since its origin. Neither uses a fixed step.
+    private long gestureOriginNanos = Long.MIN_VALUE;
+    private long lastFrameNanos = Long.MIN_VALUE;
+    private long lastTickNanos = Long.MIN_VALUE;
     private boolean pumpQueued;
     private final FramePump framePump = new FramePump(this);
     // Caller-owned press phase; never written into stateJson or the IR.
@@ -141,10 +145,24 @@ public final class MainActivity extends Activity {
                 fading = false;
                 held = false;
             }
-            host.elapsedMs = (held || fading) ? host.elapsedMs + FRAME_STEP_MS
-                    : Math.min(ANIM_SETTLED_MS, host.elapsedMs + FRAME_STEP_MS);
-            host.gestureClockMs += FRAME_STEP_MS;
-            host.runGestureTicks();
+            // Both clocks come from the real vsync timestamp. The render core
+            // evaluates displacement from these timestamps; the host never
+            // accumulates a fixed step, so 60/120/144 Hz all run at wall speed.
+            if (host.gestureOriginNanos == Long.MIN_VALUE) {
+                host.gestureOriginNanos = frameTimeNanos;
+                host.lastFrameNanos = frameTimeNanos;
+            }
+            long frameDeltaMs = FrameClock.elapsedMs(frameTimeNanos, host.lastFrameNanos);
+            host.lastFrameNanos = frameTimeNanos;
+            host.elapsedMs = (int) Math.min(Integer.MAX_VALUE, (held || fading)
+                    ? host.elapsedMs + frameDeltaMs
+                    : Math.min(ANIM_SETTLED_MS, host.elapsedMs + frameDeltaMs));
+            host.gestureClockMs = FrameClock.tickMs(frameTimeNanos,
+                    host.gestureOriginNanos, host.lastTickNanos == Long.MIN_VALUE
+                            ? -1L : FrameClock.elapsedMs(host.lastTickNanos,
+                                    host.gestureOriginNanos));
+            host.lastTickNanos = frameTimeNanos;
+            host.runGestureTicks(frameTimeNanos);
             host.renderFrame();
             if (held || fading || (host.animated && host.elapsedMs < ANIM_SETTLED_MS)) {
                 host.pumpQueued = true;
@@ -383,7 +401,7 @@ public final class MainActivity extends Activity {
         int y = TouchPhase.toCanvas(screenY, frameScaleY);
         int node = OpuromNative.opuHitTest(graphicsIr, stateJson, x, y,
                 rendererWidth, rendererHeight);
-        press.down(node, x, y, elapsedMs);
+        press.down(node, x, y, gestureClockMs);
         Log.d(PRESS_TAG, "down node=" + node + " x=" + x + " y=" + y);
         reportPressPhase(press, node != TouchPhase.NO_NODE ? PRESS_DOWN : PRESS_CLEAR, false);
     }
@@ -509,17 +527,16 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void runGestureTicks() {
-        if (renderer == 0 || gestureDeadline < 0 || elapsedMs < gestureDeadline) {
+    private void runGestureTicks(long frameTimeNanos) {
+        if (renderer == 0) {
             return;
         }
-        // Inject the exact logical deadline, not the frame's overshoot, so a
-        // replay of the same event+tick sequence stays byte-identical.
-        long tick = gestureDeadline;
-        gestureDeadline = -1L;
-        int status = OpuromNative.opuRendererTick(renderer, tick, gestureOut);
-        Log.d(PRESS_TAG, "tick t=" + tick + " status=" + status
-                + " code=" + gestureOut[0]);
+        // Every real frame advances the arena; the renderer turns the supplied
+        // timestamp into gesture deadlines, so tick count follows refresh rate.
+        long tick = gestureClockMs;
+        int status = OpuromNative.opuRendererTickAt(renderer, frameTimeNanos, tick, gestureOut);
+        Log.d(PRESS_TAG, "tick t=" + tick + " nanos=" + frameTimeNanos
+                + " status=" + status + " code=" + gestureOut[0]);
         if (status == OpuromNative.OK && gestureOut[0] == OpuromNative.GESTURE_LONG_PRESS) {
             if (press.markLongPressed(tick, LONG_PRESS_MS)) {
                 Log.d(PRESS_TAG, "long node=" + gestureOut[1]);

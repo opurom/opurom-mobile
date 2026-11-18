@@ -403,6 +403,24 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTick(
     return status;
 }
 
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererTickAt(
+    JNIEnv *env, jclass clazz, jlong renderer, jlong frame_time_nanos, jlong t_ms, jlongArray out) {
+    (void)clazz;
+    if (renderer == 0) return (jint)OPU_ERR_NULL;
+    OpuGesture gesture = { OPU_GESTURE_NONE, 0, 0, 0 };
+    jint status = (jint)opu_renderer_tick_at((OpuRenderer *)(intptr_t)renderer,
+        (int64_t)frame_time_nanos, (int64_t)t_ms, &gesture);
+    if (status == OPU_OK) write_gesture(env, out, gesture);
+    return status;
+}
+
+JNIEXPORT jlong JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererFrameTimeNanos(
+    JNIEnv *env, jclass clazz, jlong renderer) {
+    (void)env;
+    (void)clazz;
+    return (jlong)opu_renderer_frame_time_nanos((OpuRenderer *)(intptr_t)renderer);
+}
+
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuIrInitialRoute(
     JNIEnv *env, jclass clazz, jbyteArray ir, jbyteArray out) {
     jbyte *ir_bytes;
