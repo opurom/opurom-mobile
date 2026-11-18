@@ -868,3 +868,63 @@ fn confirm_release_keeps_press_until_cleared() {
         "clear after confirm restores the frame"
     );
 }
+
+
+#[test]
+fn host_node_state_sequence_changes_real_pixels_only_for_mapped_hosts() {
+    const W: u32 = 320;
+    const H: u32 = 240;
+    const BTN: u32 = 10;
+    const PLAIN: u32 = 5;
+    let renderer = OwnedRenderer::new(W, H);
+    let mut canvas = vec![0u8; (W as usize) * (H as usize) * 4];
+
+    // Deterministic sequence: static → hover on Button → focus on plain Text
+    // → clear. Every frame is a real software-rendered IR frame, not a mock.
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    let base = digest_hex(&canvas);
+
+    let hover = [BTN, OPU_NODE_STATE_HOVER];
+    assert_eq!(opu_renderer_set_node_states(renderer.0, hover.as_ptr(), 2), OPU_OK);
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    let hovered = digest_hex(&canvas);
+    assert_ne!(base, hovered, "host hover must repaint the Button host");
+
+    let focus = [PLAIN, OPU_NODE_STATE_FOCUS];
+    assert_eq!(opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    let focused_plain = digest_hex(&canvas);
+    assert_ne!(hovered, focused_plain, "a second host state must change the frame");
+
+    assert_eq!(opu_renderer_set_node_states(renderer.0, std::ptr::null(), 0), OPU_OK);
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    assert_eq!(base, digest_hex(&canvas), "clearing the table restores the static frame");
+}
+
+#[test]
+fn press_and_node_state_table_share_the_real_frame_path() {
+    const W: u32 = 320;
+    const H: u32 = 240;
+    const BTN: u32 = 10;
+    let renderer = OwnedRenderer::new(W, H);
+    let mut canvas = vec![0u8; (W as usize) * (H as usize) * 4];
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    let base = digest_hex(&canvas);
+
+    // Focus a different node, then press the Button. The combined ABI path
+    // must paint both contributions and keep the press ripple deterministic.
+    let focus = [5u32, OPU_NODE_STATE_FOCUS];
+    assert_eq!(opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(opu_renderer_set_press(renderer.0, BTN, SETTLED_MS - 100, -1, -1, 1), OPU_OK);
+    assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
+    let combined = digest_hex(&canvas);
+    assert_ne!(base, combined, "press + host state must change real pixels");
+
+    let replay = OwnedRenderer::new(W, H);
+    assert_eq!(opu_renderer_set_node_states(replay.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(opu_renderer_set_press(replay.0, BTN, SETTLED_MS - 100, -1, -1, 1), OPU_OK);
+    let mut replay_canvas = vec![0u8; (W as usize) * (H as usize) * 4];
+    assert_eq!(replay.frame(TODO_IR, "{}", &mut replay_canvas, W, H), OPU_OK);
+    assert_eq!(combined, digest_hex(&replay_canvas), "event replay must be byte-identical");
+}
+

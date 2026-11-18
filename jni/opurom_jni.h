@@ -83,6 +83,10 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetPress(
     JNIEnv *env, jclass clazz, jlong renderer, jint node_id, jlong press_start_tick,
     jlong touch_x, jlong touch_y, jint on);
 
+/* Read-only M3 node states, flat pairs of (node id, OPU_NODE_STATE_*). */
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetNodeStates(
+    JNIEnv *env, jclass clazz, jlong renderer, jintArray pairs);
+
 /* Caller-owned gesture arena: pointer, deadline query and logical tick. */
 JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererPointer(
     JNIEnv *env, jclass clazz, jlong renderer, jint kind, jint pointer_id, jint node_id,
