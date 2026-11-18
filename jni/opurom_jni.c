@@ -15,6 +15,7 @@
 #include "opurom_jni.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 
 #include "opurom.h"
 #include "platform_view.h"
@@ -361,6 +362,21 @@ JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetPress(
     return (jint)opu_renderer_set_press((OpuRenderer *)(intptr_t)renderer, (uint32_t)node_id,
                                         (int64_t)press_start_tick, (int64_t)touch_x,
                                         (int64_t)touch_y, (int32_t)on);
+}
+
+JNIEXPORT jint JNICALL Java_org_opurom_mobile_OpuromNative_opuRendererSetNodeStates(
+    JNIEnv *env, jclass clazz, jlong renderer, jintArray pairs) {
+    (void)clazz;
+    if (renderer == 0) return (jint)OPU_ERR_NULL;
+    if (pairs == NULL) return (jint)opu_renderer_set_node_states((OpuRenderer *)(intptr_t)renderer, NULL, 0);
+    jsize len = (*env)->GetArrayLength(env, pairs);
+    if (len < 0 || (len % 2) != 0) return (jint)OPU_ERR_NODE_STATE;
+    uint32_t *buf = (uint32_t *)malloc((size_t)len * sizeof(uint32_t));
+    if (buf == NULL) return (jint)OPU_ERR_PANIC;
+    (*env)->GetIntArrayRegion(env, pairs, 0, len, (jint *)buf);
+    jint status = (jint)opu_renderer_set_node_states((OpuRenderer *)(intptr_t)renderer, buf, (size_t)len);
+    free(buf);
+    return status;
 }
 
 static void write_gesture(JNIEnv *env, jlongArray out, OpuGesture gesture) {

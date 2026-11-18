@@ -38,11 +38,20 @@
 #define OPU_ERR_IR 6
 #define OPU_ERR_STATE 7
 #define OPU_ERR_TIME 8
+#define OPU_ERR_NODE_STATE 9
 
 typedef enum {
     OPU_POINTER_DOWN = 1, OPU_POINTER_MOVE = 2,
     OPU_POINTER_UP = 3, OPU_POINTER_CANCEL = 4
 } OpuPointerKind;
+
+/* Read-only M3 component state codes for opu_renderer_set_node_states. */
+typedef enum {
+    OPU_NODE_STATE_DEFAULT = 0, OPU_NODE_STATE_HOVER = 1,
+    OPU_NODE_STATE_ACTIVE = 2, OPU_NODE_STATE_FOCUS = 3,
+    OPU_NODE_STATE_DISABLED = 4, OPU_NODE_STATE_LOADING = 5,
+    OPU_NODE_STATE_SUCCESS = 6, OPU_NODE_STATE_ERROR = 7
+} OpuNodeState;
 
 typedef struct {
     uint32_t kind;        /* OpuPointerKind */
@@ -247,6 +256,12 @@ int32_t opu_renderer_set_suppress_text(OpuRenderer *renderer, int32_t on);
 int32_t opu_renderer_set_press(OpuRenderer *renderer, uint32_t node_id,
                                int64_t press_start_tick, int64_t touch_x, int64_t touch_y,
                                int32_t on);
+
+/* Replaces the read-only node-state table from the host event loop. `entries`
+ * holds len/2 packed (node_id, OpuNodeState) pairs; NULL/len=0 clears all
+ * overrides and restores the static frame. Unknown codes, odd len or a null
+ * array with nonzero len return OPU_ERR_NODE_STATE and keep the old table. */
+int32_t opu_renderer_set_node_states(OpuRenderer *renderer, const uint32_t *entries, size_t len);
 
 int32_t opu_frame_from_ir_suppressed(const uint8_t *ir_json, size_t ir_len,
                                      const uint8_t *state_json, size_t state_len,

@@ -67,6 +67,12 @@ public final class MainActivity extends Activity {
     private static final int PRESS_CLEAR = 0;
     private static final int PRESS_DOWN = 1;
     private static final int PRESS_CONFIRM = 2;
+    // Read-only M3 node states from opurom.h; hover/focus come from pointer
+    // and focus events, active/disabled stay owned by the press/IR paths.
+    private static final int NODE_STATE_HOVER = 1;
+    private static final int NODE_STATE_FOCUS = 3;
+    private int hoverNode = TouchPhase.NO_NODE;
+    private int focusNode = TouchPhase.NO_NODE;
 
     private static final byte[] ASSET_MAGIC = {'O', 'P', 'U', '1'};
     private static final byte[] ASSET_KEY = digestKey("opurom-mobile-asset-key-v1");
@@ -206,6 +212,14 @@ public final class MainActivity extends Activity {
             super(host);
             this.host = host;
             setFocusable(true);
+            setOnFocusChangeListener((v, hasFocus) -> {
+                if (!hasFocus) {
+                    host.focusNode = TouchPhase.NO_NODE;
+                } else {
+                    host.focusNode = host.hitNode(0, 0);
+                }
+                host.syncNodeStates();
+            });
         }
 
         @Override
@@ -226,6 +240,8 @@ public final class MainActivity extends Activity {
             int index = event.getActionIndex();
             if (action == MotionEvent.ACTION_DOWN) {
                 host.resetPointers();
+                host.hoverNode = host.hitNode(event.getX(index), event.getY(index));
+                host.syncNodeStates();
                 host.onPressDown(event.getX(index), event.getY(index));
                 host.onPointerDown(event, index, 0);
                 return true;
@@ -238,6 +254,8 @@ public final class MainActivity extends Activity {
                 for (int i = 0; i < event.getPointerCount(); i += 1) {
                     host.onPointerMove(event, i);
                 }
+                host.hoverNode = host.hitNode(event.getX(index), event.getY(index));
+                host.syncNodeStates();
                 return true;
             }
             if (action == MotionEvent.ACTION_UP) {
@@ -245,6 +263,8 @@ public final class MainActivity extends Activity {
                 host.cancelRemainingPointers();
                 host.onPressUp(false);
                 host.onTap(event.getX(index), event.getY(index));
+                host.hoverNode = TouchPhase.NO_NODE;
+                host.syncNodeStates();
                 return true;
             }
             if (action == MotionEvent.ACTION_POINTER_UP) {
@@ -254,6 +274,8 @@ public final class MainActivity extends Activity {
             if (action == MotionEvent.ACTION_CANCEL) {
                 host.cancelRemainingPointers();
                 host.onPressUp(true);
+                host.hoverNode = TouchPhase.NO_NODE;
+                host.syncNodeStates();
                 return true;
             }
             return false;
@@ -397,6 +419,27 @@ public final class MainActivity extends Activity {
                 }
                 canvas.restore();
             }
+        }
+    }
+
+    /** Merge the current pointer-hover and keyboard-focus hosts into the ABI table. */
+    private void syncNodeStates() {
+        int count = 0;
+        if (hoverNode != TouchPhase.NO_NODE) count += 2;
+        if (focusNode != TouchPhase.NO_NODE && focusNode != hoverNode) count += 2;
+        int[] pairs = count == 0 ? null : new int[count];
+        int i = 0;
+        if (hoverNode != TouchPhase.NO_NODE) {
+            pairs[i++] = hoverNode;
+            pairs[i++] = NODE_STATE_HOVER;
+        }
+        if (focusNode != TouchPhase.NO_NODE && focusNode != hoverNode) {
+            pairs[i++] = focusNode;
+            pairs[i++] = NODE_STATE_FOCUS;
+        }
+        int status = OpuromNative.opuRendererSetNodeStates(renderer, pairs);
+        if (status != OpuromNative.OK) {
+            Log.d(PRESS_TAG, "node states status=" + status);
         }
     }
 

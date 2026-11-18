@@ -162,6 +162,9 @@ public final class OpuromNative {
     public static native int opuRendererSetPress(long renderer, int nodeId, long pressStartTick,
                                                  long touchX, long touchY, int on);
 
+    /** Flat pairs of (node id, OPU_NODE_STATE_*); null clears all overrides. */
+    public static native int opuRendererSetNodeStates(long renderer, int[] pairs);
+
     /**
      * Gesture arena entry points (ANIMATION_AND_PHYSICS.md 8). All times are
      * caller-owned logical milliseconds; a rewind returns {@link #ERR_TIME}.
