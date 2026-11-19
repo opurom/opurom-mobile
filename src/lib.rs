@@ -1446,7 +1446,12 @@ fn frame_suppressed_impl(
     let byte_len = frame_len(width, height).ok_or(OPU_ERR_DIMENSION)?;
     let (ir, state) = parse_ir_state(ir_json, ir_len, state_json, state_len)?;
     let mut renderer = Renderer::try_new(width, height).map_err(|_| OPU_ERR_DIMENSION)?;
+    // Graphics-only host frames promise no raster glyphs, but they must not
+    // inherit the product profile's edge coverage either. Pin the stable
+    // compat baseline after suppressing text so the returned pixels stay
+    // deterministic across renderer quality defaults.
     renderer.set_suppress_text(true);
+    renderer.set_quality(opurom_render::QualityProfile::Compat);
     let pixels = renderer.pixels_at(&ir, &state, SETTLED_MS);
     Ok(write_pixels(&pixels, out, byte_len))
 }
