@@ -1446,6 +1446,10 @@ fn frame_suppressed_impl(
     let byte_len = frame_len(width, height).ok_or(OPU_ERR_DIMENSION)?;
     let (ir, state) = parse_ir_state(ir_json, ir_len, state_json, state_len)?;
     let mut renderer = Renderer::try_new(width, height).map_err(|_| OPU_ERR_DIMENSION)?;
+    // The graphics-only ABI promises no raster glyphs, but its stable bytes
+    // must not depend on the renderer's product-quality edge coverage. Pin the
+    // compat baseline before suppression so the payload is deterministic.
+    renderer.set_quality(opurom_render::QualityProfile::Compat);
     renderer.set_suppress_text(true);
     let pixels = renderer.pixels_at(&ir, &state, SETTLED_MS);
     Ok(write_pixels(&pixels, out, byte_len))
