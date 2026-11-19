@@ -1,20 +1,19 @@
 {
   "app": "Calculator",
-  "computed": [
+  "icons": [
     {
-      "expr": "cur * 10 + digit",
-      "name": "next",
-      "type": "int"
-    },
-    {
-      "expr": "rest - cur",
-      "name": "nextRest",
-      "type": "int"
-    },
-    {
-      "expr": "acc * sAdd + acc * sSub + cur * sNone + cur * sAdd - cur * sSub + acc * cur * sMul + q * sDiv",
-      "name": "applied",
-      "type": "int"
+      "name": "calculator",
+      "paths": [
+        "M4 5a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -14",
+        "M8 8a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1v1a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1l0 -1",
+        "M8 14l0 .01",
+        "M12 14l0 .01",
+        "M16 14l0 .01",
+        "M8 17l0 .01",
+        "M12 17l0 .01",
+        "M16 17l0 .01"
+      ],
+      "viewBox": "0 0 24 24"
     }
   ],
   "ir": "0.1.0",
@@ -26,22 +25,7 @@
     },
     {
       "init": 0,
-      "name": "digit",
-      "type": "int"
-    },
-    {
-      "init": 0,
       "name": "acc",
-      "type": "int"
-    },
-    {
-      "init": 0,
-      "name": "rest",
-      "type": "int"
-    },
-    {
-      "init": 0,
-      "name": "q",
       "type": "int"
     },
     {
@@ -51,33 +35,28 @@
     },
     {
       "init": 0,
-      "name": "res",
+      "name": "tmp",
       "type": "int"
     },
     {
-      "init": 1,
-      "name": "sNone",
-      "type": "int"
+      "init": false,
+      "name": "nz",
+      "type": "bool"
     },
     {
-      "init": 0,
-      "name": "sAdd",
-      "type": "int"
+      "init": false,
+      "name": "addMode",
+      "type": "bool"
     },
     {
-      "init": 0,
-      "name": "sSub",
-      "type": "int"
+      "init": false,
+      "name": "subMode",
+      "type": "bool"
     },
     {
-      "init": 0,
-      "name": "sMul",
-      "type": "int"
-    },
-    {
-      "init": 0,
-      "name": "sDiv",
-      "type": "int"
+      "init": false,
+      "name": "mulMode",
+      "type": "bool"
     },
     {
       "init": false,
@@ -85,76 +64,60 @@
       "type": "bool"
     },
     {
-      "init": true,
-      "name": "normalMode",
+      "init": false,
+      "name": "err",
       "type": "bool"
-    },
-    {
-      "init": "",
-      "name": "opLabel",
-      "type": "string"
-    },
-    {
-      "init": 0,
-      "name": "next",
-      "type": "int"
-    },
-    {
-      "init": 0,
-      "name": "nextRest",
-      "type": "int"
-    },
-    {
-      "init": 0,
-      "name": "applied",
-      "type": "int"
     }
   ],
   "theme": {
-    "accent": "#097FEB",
+    "accent": "#006EFF",
+    "fontScale": 1.0,
     "mode": "system",
-    "radius": 14
+    "radius": 12,
+    "tokens": {
+      "onSurface": "#111827",
+      "primary": "#006EFF",
+      "secondary": "#2DD8FF",
+      "stage": "#F9FAFB",
+      "surface": "#FFFFFF"
+    }
   },
   "tree": {
     "children": [
       {
         "children": [
           {
-            "children": [
-              {
-                "children": [],
-                "events": {},
-                "id": 3,
-                "kind": "Text",
-                "props": {
-                  "color": "#FFFFFF",
-                  "size": 24,
-                  "value": "Opurom Calculator"
-                }
-              },
-              {
-                "children": [],
-                "events": {},
-                "id": 4,
-                "kind": "Text",
-                "props": {
-                  "color": "#D6E8FF",
-                  "size": 12,
-                  "value": "Integer arithmetic with computed state"
-                }
-              }
-            ],
+            "children": [],
             "events": {},
             "id": 2,
-            "kind": "Container",
+            "kind": "Icon",
             "props": {
-              "animate": "ease",
-              "gradient": "#097FEB,#043B70",
-              "padding": 24,
-              "radius": 18,
-              "shadow": 4
+              "name": "calculator"
             }
           },
+          {
+            "children": [],
+            "events": {},
+            "id": 3,
+            "kind": "Text",
+            "props": {
+              "fontPx": 26,
+              "value": "Opurom Calculator"
+            }
+          }
+        ],
+        "events": {},
+        "id": 1,
+        "kind": "Container",
+        "props": {
+          "glass": true,
+          "padding": 6,
+          "radius": 12,
+          "variant": "ghost"
+        }
+      },
+      {
+        "children": [
           {
             "children": [
               {
@@ -163,9 +126,9 @@
                 "id": 6,
                 "kind": "Text",
                 "props": {
-                  "color": "#FFFFFF",
-                  "size": 44,
-                  "value": "{out}"
+                  "fontPx": 60,
+                  "size": 48,
+                  "value": "0"
                 }
               },
               {
@@ -174,36 +137,35 @@
                 "id": 7,
                 "kind": "Text",
                 "props": {
-                  "color": "#D6E8FF",
-                  "size": 14,
-                  "value": "Pending {opLabel}   |   Quotient {q}   |   Remainder {rest}"
+                  "fontPx": 16,
+                  "size": 11,
+                  "value": "Direct +/- arithmetic"
                 }
               }
             ],
             "events": {},
             "id": 5,
-            "kind": "Container",
+            "kind": "Column",
             "props": {
-              "animate": "ease",
-              "color": "#043B70",
-              "gradient": "#043B70,#097FEB",
-              "padding": 30,
-              "radius": 18,
-              "shadow": 3
+              "align": "end",
+              "gap": 4
             }
-          },
-          {
-            "children": [],
-            "events": {},
-            "id": 8,
-            "kind": "Text",
-            "props": {
-              "color": "#097FEB",
-              "size": 12,
-              "value": "Divide: = subtracts once; stop when remainder < divisor"
-            },
-            "when": "divMode"
-          },
+          }
+        ],
+        "events": {},
+        "id": 4,
+        "kind": "Container",
+        "props": {
+          "flex": 1,
+          "glass": true,
+          "padding": 12,
+          "radius": 12,
+          "shadow": 2,
+          "variant": "secondary"
+        }
+      },
+      {
+        "children": [
           {
             "children": [
               {
@@ -213,18 +175,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 7
+                        "target": "cur",
+                        "value": 0
                       },
                       {
                         "op": "set",
-                        "target": "cur",
-                        "valueFrom": "next"
+                        "target": "acc",
+                        "value": 0
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "cur"
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "tmp",
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "addMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "subMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "mulMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -233,12 +230,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "7",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 19,
+                  "fontScale": 1.0,
+                  "label": "AC",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "ghost"
                 }
               },
               {
@@ -248,13 +247,8 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 8
-                      },
-                      {
-                        "op": "set",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "tmp"
                       },
                       {
                         "op": "set",
@@ -268,12 +262,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "8",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 19,
+                  "fontScale": 1.0,
+                  "label": "DEL",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "ghost"
                 }
               },
               {
@@ -283,18 +279,18 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 9
-                      },
-                      {
-                        "op": "set",
-                        "target": "cur",
-                        "valueFrom": "next"
+                        "target": "err",
+                        "value": true
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "cur"
+                        "value": 0
+                      },
+                      {
+                        "op": "set",
+                        "target": "cur",
+                        "value": 0
                       }
                     ]
                   }
@@ -303,12 +299,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "9",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 19,
+                  "fontScale": 1.0,
+                  "label": "%",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "ghost"
                 }
               },
               {
@@ -319,26 +317,11 @@
                       {
                         "op": "set",
                         "target": "acc",
-                        "valueFrom": "applied"
-                      },
-                      {
-                        "op": "set",
-                        "target": "rest",
-                        "valueFrom": "acc"
-                      },
-                      {
-                        "op": "set",
-                        "target": "q",
-                        "value": 0
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
                         "target": "cur",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "digit",
                         "value": 0
                       },
                       {
@@ -348,33 +331,18 @@
                       },
                       {
                         "op": "set",
-                        "target": "opLabel",
-                        "value": "/"
+                        "target": "addMode",
+                        "value": false
                       },
                       {
                         "op": "set",
-                        "target": "sNone",
-                        "value": 0
+                        "target": "subMode",
+                        "value": false
                       },
                       {
                         "op": "set",
-                        "target": "sAdd",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 1
+                        "target": "mulMode",
+                        "value": false
                       },
                       {
                         "op": "set",
@@ -383,7 +351,7 @@
                       },
                       {
                         "op": "set",
-                        "target": "normalMode",
+                        "target": "err",
                         "value": false
                       }
                     ]
@@ -393,24 +361,16 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
                   "label": "/",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 2,
+                  "variant": "primary"
                 }
-              }
-            ],
-            "events": {},
-            "id": 9,
-            "kind": "Row",
-            "props": {
-              "gap": 10
-            }
-          },
-          {
-            "children": [
+              },
               {
                 "children": [],
                 "events": {
@@ -418,18 +378,126 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 4
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 7
                       },
                       {
                         "op": "set",
                         "target": "out",
                         "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                "id": 14,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "7",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "tmp",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 8
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -438,12 +506,15 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "4",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "8",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
               },
               {
@@ -453,18 +524,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 5
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 9
                       },
                       {
                         "op": "set",
                         "target": "out",
                         "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -473,12 +579,15 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "5",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "9",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
               },
               {
@@ -488,18 +597,43 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 6
+                        "target": "acc",
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "value": 0
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "cur"
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "addMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "subMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "mulMode",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -508,12 +642,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "6",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "x",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 2,
+                  "variant": "primary"
                 }
               },
               {
@@ -523,73 +659,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "acc",
-                        "valueFrom": "applied"
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
-                        "target": "rest",
-                        "valueFrom": "acc"
-                      },
-                      {
-                        "op": "set",
-                        "target": "q",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "value": 0
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
-                        "target": "digit",
-                        "value": 0
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 4
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "acc"
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
-                        "target": "opLabel",
-                        "value": "x"
-                      },
-                      {
-                        "op": "set",
-                        "target": "sNone",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sAdd",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 1
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "divMode",
-                        "value": false
-                      },
-                      {
-                        "op": "set",
-                        "target": "normalMode",
+                        "target": "nz",
                         "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -598,24 +714,17 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
-                  "label": "x",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "4",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
-              }
-            ],
-            "events": {},
-            "id": 14,
-            "kind": "Row",
-            "props": {
-              "gap": 10
-            }
-          },
-          {
-            "children": [
+              },
               {
                 "children": [],
                 "events": {
@@ -623,18 +732,126 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 1
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 5
                       },
                       {
                         "op": "set",
                         "target": "out",
                         "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                "id": 19,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "5",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "tmp",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 6
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -643,12 +860,15 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "1",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "6",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
               },
               {
@@ -658,18 +878,43 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 2
+                        "target": "acc",
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "value": 0
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "cur"
+                        "valueFrom": "acc"
+                      },
+                      {
+                        "op": "set",
+                        "target": "addMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "subMode",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "mulMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -678,12 +923,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "2",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "-",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 2,
+                  "variant": "primary"
                 }
               },
               {
@@ -693,18 +940,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 3
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 1
                       },
                       {
                         "op": "set",
                         "target": "out",
                         "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -713,12 +995,15 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
-                  "label": "3",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "1",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
               },
               {
@@ -728,73 +1013,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "acc",
-                        "valueFrom": "applied"
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
-                        "target": "rest",
-                        "valueFrom": "acc"
-                      },
-                      {
-                        "op": "set",
-                        "target": "q",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "value": 0
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
-                        "target": "digit",
-                        "value": 0
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 2
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "acc"
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
-                        "target": "opLabel",
-                        "value": "-"
-                      },
-                      {
-                        "op": "set",
-                        "target": "sNone",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sAdd",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 1
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "divMode",
-                        "value": false
-                      },
-                      {
-                        "op": "set",
-                        "target": "normalMode",
+                        "target": "nz",
                         "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -803,24 +1068,17 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
-                  "label": "-",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "2",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
                 }
-              }
-            ],
-            "events": {},
-            "id": 19,
-            "kind": "Row",
-            "props": {
-              "gap": 10
-            }
-          },
-          {
-            "children": [
+              },
               {
                 "children": [],
                 "events": {
@@ -828,68 +1086,106 @@
                     "actions": [
                       {
                         "op": "set",
+                        "target": "tmp",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 3
+                      },
+                      {
+                        "op": "set",
+                        "target": "out",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": true
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
+                      }
+                    ]
+                  }
+                },
+                "id": 24,
+                "kind": "Button",
+                "props": {
+                  "animate": "spring",
+                  "columnSpan": 1,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "3",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
+                }
+              },
+              {
+                "children": [],
+                "events": {
+                  "tap": {
+                    "actions": [
+                      {
+                        "op": "set",
+                        "target": "acc",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
                         "target": "cur",
                         "value": 0
                       },
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "acc",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "rest",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "q",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "res",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
                         "target": "out",
-                        "value": 0
+                        "valueFrom": "acc"
                       },
                       {
                         "op": "set",
-                        "target": "opLabel",
-                        "value": ""
+                        "target": "addMode",
+                        "value": true
                       },
                       {
                         "op": "set",
-                        "target": "sNone",
-                        "value": 1
+                        "target": "subMode",
+                        "value": false
                       },
                       {
                         "op": "set",
-                        "target": "sAdd",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 0
+                        "target": "mulMode",
+                        "value": false
                       },
                       {
                         "op": "set",
@@ -898,8 +1194,8 @@
                       },
                       {
                         "op": "set",
-                        "target": "normalMode",
-                        "value": true
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -908,12 +1204,14 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#101828",
-                  "fontScale": 1.25,
-                  "label": "C",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "fontPx": 26,
+                  "fontScale": 1.1,
+                  "label": "+",
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 2,
+                  "variant": "primary"
                 }
               },
               {
@@ -923,18 +1221,53 @@
                     "actions": [
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 0
+                        "target": "tmp",
+                        "valueFrom": "cur"
                       },
                       {
-                        "op": "set",
+                        "op": "add",
                         "target": "cur",
-                        "valueFrom": "next"
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "cur"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "valueFrom": "tmp"
+                      },
+                      {
+                        "op": "add",
+                        "target": "cur",
+                        "value": 0
                       },
                       {
                         "op": "set",
                         "target": "out",
                         "valueFrom": "cur"
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "err",
+                        "value": false
                       }
                     ]
                   }
@@ -943,12 +1276,24 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#097FEB",
-                  "fontScale": 1.25,
+                  "columnSpan": 2,
+                  "fontPx": 26,
+                  "fontScale": 1.1,
                   "label": "0",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 2
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 0,
+                  "variant": "secondary"
+                }
+              },
+              {
+                "children": [],
+                "events": {},
+                "id": 27,
+                "kind": "Spacer",
+                "props": {
+                  "height": 1
                 }
               },
               {
@@ -957,109 +1302,43 @@
                   "tap": {
                     "actions": [
                       {
-                        "op": "set",
-                        "target": "rest",
-                        "valueFrom": "nextRest"
-                      },
-                      {
                         "op": "add",
-                        "target": "q",
-                        "value": 1
+                        "target": "acc",
+                        "valueFrom": "cur"
                       },
                       {
                         "op": "set",
                         "target": "out",
-                        "valueFrom": "q"
-                      }
-                    ]
-                  }
-                },
-                "id": 27,
-                "kind": "Button",
-                "props": {
-                  "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
-                  "label": "=",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
-                },
-                "when": "divMode"
-              },
-              {
-                "children": [],
-                "events": {
-                  "tap": {
-                    "actions": [
-                      {
-                        "op": "set",
-                        "target": "acc",
-                        "valueFrom": "applied"
-                      },
-                      {
-                        "op": "set",
-                        "target": "res",
                         "valueFrom": "acc"
                       },
                       {
                         "op": "set",
-                        "target": "out",
-                        "valueFrom": "res"
-                      },
-                      {
-                        "op": "set",
                         "target": "cur",
-                        "value": 0
+                        "valueFrom": "acc"
                       },
                       {
                         "op": "set",
-                        "target": "digit",
-                        "value": 0
+                        "target": "addMode",
+                        "value": false
                       },
                       {
                         "op": "set",
-                        "target": "rest",
-                        "value": 0
+                        "target": "subMode",
+                        "value": false
                       },
                       {
                         "op": "set",
-                        "target": "q",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "opLabel",
-                        "value": "="
-                      },
-                      {
-                        "op": "set",
-                        "target": "sNone",
-                        "value": 1
-                      },
-                      {
-                        "op": "set",
-                        "target": "sAdd",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 0
+                        "target": "mulMode",
+                        "value": false
                       },
                       {
                         "op": "set",
                         "target": "divMode",
+                        "value": false
+                      },
+                      {
+                        "op": "set",
+                        "target": "nz",
                         "value": false
                       }
                     ]
@@ -1069,142 +1348,41 @@
                 "kind": "Button",
                 "props": {
                   "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
+                  "fontPx": 26,
                   "label": "=",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
-                },
-                "when": "normalMode"
-              },
-              {
-                "children": [],
-                "events": {
-                  "tap": {
-                    "actions": [
-                      {
-                        "op": "set",
-                        "target": "acc",
-                        "valueFrom": "applied"
-                      },
-                      {
-                        "op": "set",
-                        "target": "rest",
-                        "valueFrom": "acc"
-                      },
-                      {
-                        "op": "set",
-                        "target": "q",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "cur",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "digit",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "out",
-                        "valueFrom": "acc"
-                      },
-                      {
-                        "op": "set",
-                        "target": "opLabel",
-                        "value": "+"
-                      },
-                      {
-                        "op": "set",
-                        "target": "sNone",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sAdd",
-                        "value": 1
-                      },
-                      {
-                        "op": "set",
-                        "target": "sSub",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sMul",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "sDiv",
-                        "value": 0
-                      },
-                      {
-                        "op": "set",
-                        "target": "divMode",
-                        "value": false
-                      },
-                      {
-                        "op": "set",
-                        "target": "normalMode",
-                        "value": true
-                      }
-                    ]
-                  }
-                },
-                "id": 29,
-                "kind": "Button",
-                "props": {
-                  "animate": "spring",
-                  "color": "#04509B",
-                  "fontScale": 1.25,
-                  "label": "+",
-                  "padding": 18,
-                  "radius": 14,
-                  "shadow": 3
+                  "margin": 2,
+                  "padding": 10,
+                  "radius": 12,
+                  "shadow": 2,
+                  "variant": "primary"
                 }
               }
             ],
             "events": {},
-            "id": 24,
-            "kind": "Row",
+            "id": 9,
+            "kind": "Grid",
             "props": {
-              "gap": 10
-            }
-          },
-          {
-            "children": [],
-            "events": {},
-            "id": 30,
-            "kind": "Spacer",
-            "props": {
-              "height": 20
+              "columns": 4,
+              "compactColumns": 4,
+              "fillHeight": true
             }
           }
         ],
         "events": {},
-        "id": 1,
-        "kind": "Column",
+        "id": 8,
+        "kind": "Container",
         "props": {
-          "gap": 28,
-          "padding": 28,
-          "width": 800
+          "flex": 2,
+          "padding": 0
         }
       }
     ],
     "events": {},
     "id": 0,
-    "kind": "Scroll",
+    "kind": "Column",
     "props": {
-      "animate": "ease",
-      "border": "#EDF2FA",
-      "color": "#EDF2FA",
-      "height": 640,
-      "radius": 14
+      "gap": 8,
+      "padding": 8
     }
   }
 }
