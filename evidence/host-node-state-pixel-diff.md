@@ -7,12 +7,12 @@ digest: FNV-1a 64-bit hex over RGBA bytes
 
 | step | ABI event | frame digest | changed pixels vs baseline |
 | --- | --- | --- | --- |
-| 0 | initial | 2687ffd7c45f45d9 | 0 |
-| 1 | set_node_states([10, hover]) | 6e6f4c640923b8fd | 1782 |
-| 2 | set_node_states([10, focus]) | 8419927c2a0e1ca8 | - |
-| 3 | set_node_states(null, 0) | 2687ffd7c45f45d9 | 0 |
-| 4 | set_press(10, 3900, down) | d4f5f41a2b9d231b | 1927 |
-| 5 | set_press(10, 4000, confirm) | d4f5f41a2b9d231b | - |
-| 6 | set_press(0, 0, clear) | 2687ffd7c45f45d9 | 0 |
+| 0 | initial | d20f0ad6cd30ee71 | 0 |
+| 1 | set_node_states([10, hover]) | c129029a38b2c55f | 1798 |
+| 2 | set_node_states([10, focus]) | f36111db305bb621 | - |
+| 3 | set_node_states(null, 0) | d20f0ad6cd30ee71 | 0 |
+| 4 | set_press(10, 3900, down) | cae7f389c21ade42 | 1939 |
+| 5 | set_press(10, 4000, confirm) | cae7f389c21ade42 | - |
+| 6 | set_press(0, 0, clear) | d20f0ad6cd30ee71 | 0 |
 
 replay: all six digests reproduced byte-for-byte on a fresh OpuRenderer.
