@@ -21,8 +21,8 @@ use opurom_core::{
 };
 use opurom_render::{
     hit, layout, layout_at, parse_ir, parse_state_json, tap_hit_rect, text_spans_for, Frame,
-    Gesture, GestureEngine, GestureKind, Ir, Node, PointerEvent, PointerKind, PressPhase, Rect,
-    Renderer, StateView, SETTLED_MS,
+    Gesture, GestureEngine, GestureKind, Ir, Node, NodeState, PointerEvent, PointerKind,
+    PressPhase, Renderer, StateView, SETTLED_MS,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::alloc::{alloc, dealloc, Layout};
@@ -39,6 +39,18 @@ pub const OPU_ERR_PANIC: i32 = 5;
 pub const OPU_ERR_IR: i32 = 6;
 pub const OPU_ERR_STATE: i32 = 7;
 pub const OPU_ERR_TIME: i32 = 8;
+/// A node-state JSON entry has an unknown state name or a non-integer id.
+pub const OPU_ERR_NODE_STATE: i32 = 9;
+
+/// C ABI state names for `opu_renderer_set_node_states`, in `NodeState` order.
+pub const OPU_NODE_STATE_DEFAULT: u32 = 0;
+pub const OPU_NODE_STATE_HOVER: u32 = 1;
+pub const OPU_NODE_STATE_ACTIVE: u32 = 2;
+pub const OPU_NODE_STATE_FOCUS: u32 = 3;
+pub const OPU_NODE_STATE_DISABLED: u32 = 4;
+pub const OPU_NODE_STATE_LOADING: u32 = 5;
+pub const OPU_NODE_STATE_SUCCESS: u32 = 6;
+pub const OPU_NODE_STATE_ERROR: u32 = 7;
 
 /* Negative status values for span export, so a count can never be confused
  * with an error by a caller that only checks the sign. */
@@ -267,6 +279,11 @@ pub struct OpuRenderer {
     height: u32,
     /// Caller-owned press phase; None keeps every frame byte-identical.
     press: Option<PressPhase>,
+    /// Caller-owned read-only node-state table; empty keeps every frame
+    /// byte-identical to the static path. Pointer/focus events update it.
+    node_states: Vec<(u32, NodeState)>,
+    /// True when the previous frame used the host-state full-raster path.
+    node_states_sampled_last: bool,
     /// Last parsed IR keyed by (content hash, route). Press frames reuse it;
     /// a changed IR or route invalidates it. State is never cached (small).
     ir_cache: Option<([u64; 3], Option<String>, Ir, Vec<u8>)>,
@@ -314,14 +331,62 @@ impl OpuRenderer {
         Ok(())
     }
 
-    /// Renders one frame, honouring the press phase when one is set. Without a
-    /// press this is the exact incremental call, so default frames are unchanged.
+    /// Renders one frame, honouring the caller-owned press phase and node-state
+    /// table. With neither set this is the exact incremental static path.
     fn render_at(&mut self, ir: &Ir, state: &StateView, elapsed_ms: i64) -> Frame {
-        match self.press_phase(ir, state, elapsed_ms) {
-            Some(p) => self
-                .renderer
-                .render_with_press_incremental(ir, state, elapsed_ms, Some(&p)),
-            None => self.renderer.render_incremental_at(ir, state, elapsed_ms),
+        // A prior host-state frame may leave an incremental draft buffer whose
+        // layout key is identical to the now-cleared static frame. Take one
+        // full pass to return to the canonical authored frame.
+        if self.node_states_sampled_last && self.node_states.is_empty() && self.press.is_none() {
+            self.node_states_sampled_last = false;
+            return self.renderer.render_at(ir, state, elapsed_ms);
+        }
+        self.node_states_sampled_last = !self.node_states.is_empty() || self.press.is_some();
+        match (self.press, self.node_states.as_slice()) {
+            (None, []) => self.renderer.render_incremental_at(ir, state, elapsed_ms),
+            (None, states) => {
+                // Host state changes can end an animation track with only a
+                // paint payload delta. That is presentation state, deliberately
+                // invisible to the incremental layout key, so take a full
+                // raster while a node-state table is active.
+                let mut laid = opurom_render::layout_animated_at(
+                    ir,
+                    state,
+                    self.width,
+                    self.height,
+                    elapsed_ms,
+                    &mut opurom_render::anim_for_abi(&mut self.renderer),
+                );
+                opurom_render::apply_node_states_for_abi(&mut laid, ir, states);
+                opurom_render::render_laid_for_abi(&mut self.renderer, &laid, ir)
+            }
+            (Some(press), []) => {
+                let p = self.press_phase(ir, state, elapsed_ms).unwrap_or(press);
+                self.renderer
+                    .render_with_press_incremental(ir, state, elapsed_ms, Some(&p))
+            }
+            (Some(press), states) => {
+                let p = self.press_phase(ir, state, elapsed_ms).unwrap_or(press);
+                let mut laid = opurom_render::layout_animated_at(
+                    ir,
+                    state,
+                    self.width,
+                    self.height,
+                    elapsed_ms,
+                    &mut opurom_render::anim_for_abi(&mut self.renderer),
+                );
+                opurom_render::apply_node_states_for_abi(&mut laid, ir, states);
+                // A press tints its ink host, so the host state table must not
+                // swallow the pressed state: apply the press on top of it.
+                opurom_render::apply_press_state_for_abi(&mut laid, ir, Some(&p));
+                opurom_render::render_laid_press_for_abi(
+                    &mut self.renderer,
+                    &laid,
+                    ir,
+                    Some(&p),
+                    elapsed_ms,
+                )
+            }
         }
     }
 
@@ -458,6 +523,8 @@ pub extern "C" fn opu_renderer_new(width: u32, height: u32) -> *mut OpuRenderer 
                 width,
                 height,
                 press: None,
+                node_states: Vec::new(),
+                node_states_sampled_last: false,
                 ir_cache: None,
                 gesture: GestureEngine::new(),
                 gesture_key: None,
@@ -1211,6 +1278,51 @@ pub extern "C" fn opu_renderer_set_suppress_text(renderer: *mut OpuRenderer, on:
 /// the original `press_start_tick`. `2` (CONFIRM, release) keeps the press and
 /// stamps its confirm tick with `press_start_tick` so the renderer runs the
 /// accelerated radius and delayed fade-out; it never clears. `0` (CLEAR) and a
+/// Replaces the caller-owned read-only node-state table. The host passes
+/// `len` packed pairs `(node_id, state_code)` in one flat array; an empty or
+/// null table clears every override and returns every frame to the static
+/// path. A unknown state code returns `OPU_ERR_NODE_STATE` and leaves the
+/// previous table untouched. Ids need not exist in the current IR: an id that
+/// is not laid out this frame simply paints nothing.
+#[no_mangle]
+pub extern "C" fn opu_renderer_set_node_states(
+    renderer: *mut OpuRenderer,
+    entries: *const u32,
+    len: usize,
+) -> i32 {
+    ffi_guard(
+        || {
+            if renderer.is_null() {
+                return OPU_ERR_NULL;
+            }
+            let mut parsed: Vec<(u32, NodeState)> = Vec::with_capacity(len / 2);
+            if len > 0 {
+                if entries.is_null() || len % 2 != 0 {
+                    return OPU_ERR_NODE_STATE;
+                }
+                let slice = unsafe { std::slice::from_raw_parts(entries, len) };
+                for pair in slice.chunks_exact(2) {
+                    let state = match pair[1] {
+                        OPU_NODE_STATE_DEFAULT => NodeState::Default,
+                        OPU_NODE_STATE_HOVER => NodeState::Hover,
+                        OPU_NODE_STATE_ACTIVE => NodeState::Active,
+                        OPU_NODE_STATE_FOCUS => NodeState::Focus,
+                        OPU_NODE_STATE_DISABLED => NodeState::Disabled,
+                        OPU_NODE_STATE_LOADING => NodeState::Loading,
+                        OPU_NODE_STATE_SUCCESS => NodeState::Success,
+                        OPU_NODE_STATE_ERROR => NodeState::Error,
+                        _ => return OPU_ERR_NODE_STATE,
+                    };
+                    parsed.push((pair[0], state));
+                }
+            }
+            unsafe { (*renderer).node_states = parsed };
+            OPU_OK
+        },
+        OPU_ERR_PANIC,
+    )
+}
+
 /// zero `node_id` clear the press. Never touches the state JSON or the IR;
 /// frames without a press are unchanged.
 #[no_mangle]
@@ -1478,6 +1590,7 @@ pub extern "C" fn opu_frame_from_ir_suppressed(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opurom_render::Rect;
 
     #[test]
     fn set_press_new_down_restarts_clock_and_confirm_records_tick() {
@@ -2067,5 +2180,49 @@ mod tests {
         );
         assert_eq!(first.1.code, OPU_GESTURE_NONE, "drag rejects long press");
         assert_eq!(first.2, -1, "no stale deadline after drag");
+    }
+
+    #[test]
+    fn node_state_abi_rejects_bad_tables_without_mutating() {
+        let renderer = opu_renderer_new(32, 32);
+        assert!(!renderer.is_null());
+        let pairs = [7u32, OPU_NODE_STATE_HOVER];
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, pairs.as_ptr(), 2),
+            OPU_OK
+        );
+        assert_eq!(unsafe { &*renderer }.node_states.len(), 1);
+
+        let bad_state = [7u32, 99];
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, bad_state.as_ptr(), 2),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            unsafe { &*renderer }.node_states.len(),
+            1,
+            "bad table is rejected atomically"
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, pairs.as_ptr(), 1),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, std::ptr::null(), 2),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(std::ptr::null_mut(), std::ptr::null(), 0),
+            OPU_ERR_NULL
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, std::ptr::null(), 0),
+            OPU_OK
+        );
+        assert!(
+            unsafe { &*renderer }.node_states.is_empty(),
+            "empty table clears all overrides"
+        );
+        opu_renderer_free(renderer);
     }
 }

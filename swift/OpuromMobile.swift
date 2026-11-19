@@ -5,6 +5,17 @@ public enum OpuromEvent {
     public static let reset = UInt32(OPU_EVENT_RESET)
 }
 
+public enum OpuromNodeState: UInt32 {
+    case `default` = 0
+    case hover = 1
+    case active = 2
+    case focus = 3
+    case disabled = 4
+    case loading = 5
+    case success = 6
+    case error = 7
+}
+
 public enum OpuromMobileError: Error, Equatable {
     case stateUnavailable
     case rendererUnavailable
@@ -59,6 +70,28 @@ public final class OpuromIRRenderer {
     deinit {
         if let owned = handle {
             opu_renderer_free(owned)
+        }
+    }
+
+    /// Replaces the read-only node-state table from the host pointer/focus
+    /// loop. Each pair is (IR node id, OpuromNodeState.rawValue); pass nil to
+    /// restore the static frame. Pointer-down/up active ripple remains owned
+    /// by the press phase, not by this table.
+    public func setNodeStates(_ pairs: [(UInt32, OpuromNodeState)]) throws {
+        guard let owned = handle else {
+            throw OpuromMobileError.rendererUnavailable
+        }
+        var values = [UInt32]()
+        values.reserveCapacity(pairs.count * 2)
+        for (id, state) in pairs {
+            values.append(id)
+            values.append(state.rawValue)
+        }
+        let status = values.withUnsafeBufferPointer { buffer in
+            opu_renderer_set_node_states(owned, buffer.baseAddress, buffer.count)
+        }
+        guard status == Int32(OPU_OK) else {
+            throw OpuromMobileError.abi(status)
         }
     }
 
