@@ -318,7 +318,9 @@ public final class MainActivity extends Activity {
                     paint.setColor(Color.argb(color.optInt(3, 255), color.optInt(0, 0),
                             color.optInt(1, 0), color.optInt(2, 0)));
                 }
-                // fontPx is an exact logical size; absent falls back to the raster 7*size.
+                // fontPx is exact in logical pixels. The renderer exports it for
+                // every Text and Button span; the legacy 7*size estimate remains
+                // only for hand-written IR that predates the typography contract.
                 int fontPx = span.optInt("fontPx", 0);
                 float logicalSize = fontPx > 0 ? fontPx : 7f * Math.max(1, span.optInt("size", 1));
                 float textSize = logicalSize * scaleY;
@@ -349,17 +351,24 @@ public final class MainActivity extends Activity {
                 float bottom = (y + h) * scaleY;
                 float anchorX;
                 float baseline;
+                Paint.FontMetrics fm = paint.getFontMetrics();
+                float fontHeight = fm.descent - fm.ascent;
                 if (hasOrigin) {
+                    // Renderer origin is the glyph-box top-left. Android drawText
+                    // takes a baseline, so offset by the real font ascent.
                     anchorX = origin.optInt(0, x) * scaleX;
-                    baseline = origin.optInt(1, y) * scaleY + textSize;
+                    baseline = origin.optInt(1, y) * scaleY - fm.ascent;
+                } else if ("center".equals(align)) {
+                    anchorX = (left + right) / 2f;
+                    baseline = (top + bottom - fontHeight) / 2f - fm.ascent;
+                } else if ("end".equals(align)) {
+                    anchorX = right - 2f * scaleX;
+                    baseline = (top + bottom - fontHeight) / 2f - fm.ascent;
                 } else {
-                    float pad = 2f * scaleX;
-                    anchorX = "center".equals(align) ? (left + right) / 2f
-                            : "end".equals(align) ? right - pad : left + pad;
-                    baseline = top + Math.max(2f * scaleY, (bottom - top - textSize) / 2f)
-                            + textSize;
+                    anchorX = left + 2f * scaleX;
+                    baseline = (top + bottom - fontHeight) / 2f - fm.ascent;
                 }
-                float lineHeight = textSize + 2f * scaleY;
+                float lineHeight = Math.max(fontHeight + 2f * scaleY, textSize);
                 // Only a declared maxLines changes drawing. A missing key keeps
                 // the exact legacy split/draw path; a zero cap draws nothing.
                 int maxLines = span.has("maxLines") ? span.optInt("maxLines", 0) : -1;
@@ -662,10 +671,14 @@ public final class MainActivity extends Activity {
         if (viewWidth <= 0 || viewHeight <= 0) {
             return;
         }
-        float scale = Math.min(1f, (float) MAX_FRAME_PIXELS
-                / Math.max(viewWidth, viewHeight));
-        int width = Math.max(1, (int) (viewWidth * scale));
-        int height = Math.max(1, (int) (viewHeight * scale));
+        // Layout in device-independent pixels. The renderer emits logical
+        // coordinates and exact fontPx values in dp; the host converts them to
+        // physical pixels once when drawing. Rendering in physical pixels
+        // shrinks 24/64/16 dp text by density (420 dpi -> ~0.39x here) and made
+        // the calculator unreadable.
+        final float density = Math.max(0.5f, getResources().getDisplayMetrics().density);
+        int width = Math.max(1, Math.round(viewWidth / density));
+        int height = Math.max(1, Math.round(viewHeight / density));
         int pixelLen = width * height * 4;
         if (framePixels == null || framePixels.length != pixelLen) {
             framePixels = new byte[pixelLen];
@@ -684,8 +697,8 @@ public final class MainActivity extends Activity {
         // resize or a fallback cannot leave the overlay on an older scale.
         rendererWidth = width;
         rendererHeight = height;
-        frameScaleX = (float) viewWidth / width;
-        frameScaleY = (float) viewHeight / height;
+        frameScaleX = (float) viewWidth / width;   // ~= density
+        frameScaleY = (float) viewHeight / height; // ~= density
         // Preview path: the kernel rasterizes graphics only; all text is
         // painted by TextLayerView with the host system font.
         if (renderer != 0) {
@@ -714,7 +727,12 @@ public final class MainActivity extends Activity {
         int spanCount = OpuromNative.opuTextSpansRoute(graphicsIr, stateJson, route,
                 width, height, spanBytes);
         if (spanCount >= 0) {
-            textLayer.setSpans(new String(trim(spanBytes), StandardCharsets.UTF_8));
+            String spanJson = new String(trim(spanBytes), StandardCharsets.UTF_8);
+            Log.d("OpuromText", String.format(
+                    "view=%dx%d renderer=%dx%d scale=%.3f/%.3f spans=%d %s",
+                    viewWidth, viewHeight, width, height, frameScaleX, frameScaleY,
+                    spanCount, spanJson.length() > 600 ? spanJson.substring(0, 600) : spanJson));
+            textLayer.setSpans(spanJson);
         } else {
             textLayer.clear();
         }
