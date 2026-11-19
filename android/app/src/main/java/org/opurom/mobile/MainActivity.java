@@ -319,7 +319,7 @@ public final class MainActivity extends Activity {
                             color.optInt(1, 0), color.optInt(2, 0)));
                 }
                 // fontPx is exact in logical pixels. The renderer exports it for
-                // every Text and Button span; the legacy 7*size estimate remains
+                // every text and interactive span; the legacy 7*size estimate remains
                 // only for hand-written IR that predates the typography contract.
                 int fontPx = span.optInt("fontPx", 0);
                 float logicalSize = fontPx > 0 ? fontPx : 7f * Math.max(1, span.optInt("size", 1));
