@@ -900,7 +900,6 @@ fn confirm_release_keeps_press_until_cleared() {
     );
 }
 
-
 #[test]
 fn host_node_state_sequence_changes_real_pixels_only_for_mapped_hosts() {
     const W: u32 = 320;
@@ -916,20 +915,36 @@ fn host_node_state_sequence_changes_real_pixels_only_for_mapped_hosts() {
     let base = digest_hex(&canvas);
 
     let hover = [BTN, OPU_NODE_STATE_HOVER];
-    assert_eq!(opu_renderer_set_node_states(renderer.0, hover.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, hover.as_ptr(), 2),
+        OPU_OK
+    );
     assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
     let hovered = digest_hex(&canvas);
     assert_ne!(base, hovered, "host hover must repaint the Button host");
 
     let focus = [PLAIN, OPU_NODE_STATE_FOCUS];
-    assert_eq!(opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2),
+        OPU_OK
+    );
     assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
     let focused_plain = digest_hex(&canvas);
-    assert_ne!(hovered, focused_plain, "a second host state must change the frame");
+    assert_ne!(
+        hovered, focused_plain,
+        "a second host state must change the frame"
+    );
 
-    assert_eq!(opu_renderer_set_node_states(renderer.0, std::ptr::null(), 0), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, std::ptr::null(), 0),
+        OPU_OK
+    );
     assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
-    assert_eq!(base, digest_hex(&canvas), "clearing the table restores the static frame");
+    assert_eq!(
+        base,
+        digest_hex(&canvas),
+        "clearing the table restores the static frame"
+    );
 }
 
 #[test]
@@ -945,20 +960,38 @@ fn press_and_node_state_table_share_the_real_frame_path() {
     // Focus a different node, then press the Button. The combined ABI path
     // must paint both contributions and keep the press ripple deterministic.
     let focus = [5u32, OPU_NODE_STATE_FOCUS];
-    assert_eq!(opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2), OPU_OK);
-    assert_eq!(opu_renderer_set_press(renderer.0, BTN, SETTLED_MS - 100, -1, -1, 1), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2),
+        OPU_OK
+    );
+    assert_eq!(
+        opu_renderer_set_press(renderer.0, BTN, SETTLED_MS - 100, -1, -1, 1),
+        OPU_OK
+    );
     assert_eq!(renderer.frame(TODO_IR, "{}", &mut canvas, W, H), OPU_OK);
     let combined = digest_hex(&canvas);
     assert_ne!(base, combined, "press + host state must change real pixels");
 
     let replay = OwnedRenderer::new(W, H);
-    assert_eq!(opu_renderer_set_node_states(replay.0, focus.as_ptr(), 2), OPU_OK);
-    assert_eq!(opu_renderer_set_press(replay.0, BTN, SETTLED_MS - 100, -1, -1, 1), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(replay.0, focus.as_ptr(), 2),
+        OPU_OK
+    );
+    assert_eq!(
+        opu_renderer_set_press(replay.0, BTN, SETTLED_MS - 100, -1, -1, 1),
+        OPU_OK
+    );
     let mut replay_canvas = vec![0u8; (W as usize) * (H as usize) * 4];
-    assert_eq!(replay.frame(TODO_IR, "{}", &mut replay_canvas, W, H), OPU_OK);
-    assert_eq!(combined, digest_hex(&replay_canvas), "event replay must be byte-identical");
+    assert_eq!(
+        replay.frame(TODO_IR, "{}", &mut replay_canvas, W, H),
+        OPU_OK
+    );
+    assert_eq!(
+        combined,
+        digest_hex(&replay_canvas),
+        "event replay must be byte-identical"
+    );
 }
-
 
 /// Replayable host evidence fixture. This is NOT device evidence: it records
 /// ABI event sequences and software-raster pixels on the build host. The
@@ -972,9 +1005,9 @@ fn host_event_sequence_writes_replayable_pixel_diff_evidence() {
     const H: u32 = 240;
     const HOVER_NODE: u32 = 10; // Button in todo.opuir.json.
     const FOCUS_NODE: u32 = 10; // Same Button host: ink_host maps to node 10.
-    // The evidence sequence uses one OpuRenderer across all steps, matching the
-    // live host pump. Its `prev` buffer feeds the incremental static path, so
-    // every clearing step must be exercised through the same renderer.
+                                // The evidence sequence uses one OpuRenderer across all steps, matching the
+                                // live host pump. Its `prev` buffer feeds the incremental static path, so
+                                // every clearing step must be exercised through the same renderer.
     const PRESS_NODE: u32 = 10;
     const TICK: i64 = SETTLED_MS - 100;
 
@@ -998,14 +1031,20 @@ fn host_event_sequence_writes_replayable_pixel_diff_evidence() {
     baseline.copy_from_slice(&canvas);
 
     let hover = [HOVER_NODE, OPU_NODE_STATE_HOVER];
-    assert_eq!(opu_renderer_set_node_states(renderer.0, hover.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, hover.as_ptr(), 2),
+        OPU_OK
+    );
     let hovered = frame(&renderer, &mut canvas);
     let hover_diff = changed_pixels(&baseline, &canvas);
     let mut hovered_pixels = vec![0u8; canvas.len()];
     hovered_pixels.copy_from_slice(&canvas);
 
     let focus = [FOCUS_NODE, OPU_NODE_STATE_FOCUS];
-    assert_eq!(opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(renderer.0, focus.as_ptr(), 2),
+        OPU_OK
+    );
     let focused = frame(&renderer, &mut canvas);
 
     assert_eq!(
@@ -1027,46 +1066,98 @@ fn host_event_sequence_writes_replayable_pixel_diff_evidence() {
         OPU_OK
     );
     let confirmed = frame(&renderer, &mut canvas);
+    assert_eq!(opu_renderer_set_press(renderer.0, 0, 0, 0, 0, 0), OPU_OK);
     assert_eq!(
-        opu_renderer_set_press(renderer.0, 0, 0, 0, 0, 0),
-        OPU_OK
+        base,
+        frame(&renderer, &mut canvas),
+        "press clear restores baseline"
     );
-    assert_eq!(base, frame(&renderer, &mut canvas), "press clear restores baseline");
 
     // Replay every event on a fresh renderer. The digest path must be exact.
     let replay = OwnedRenderer::new(W, H);
     let mut replay_canvas = vec![0u8; canvas.len()];
-    assert_eq!(opu_renderer_set_node_states(replay.0, hover.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(replay.0, hover.as_ptr(), 2),
+        OPU_OK
+    );
     assert_eq!(hovered, frame(&replay, &mut replay_canvas));
-    assert_eq!(hovered_pixels, replay_canvas, "hover pixel diff must replay");
-    assert_eq!(opu_renderer_set_node_states(replay.0, focus.as_ptr(), 2), OPU_OK);
+    assert_eq!(
+        hovered_pixels, replay_canvas,
+        "hover pixel diff must replay"
+    );
+    assert_eq!(
+        opu_renderer_set_node_states(replay.0, focus.as_ptr(), 2),
+        OPU_OK
+    );
     assert_eq!(focused, frame(&replay, &mut replay_canvas));
-    assert_eq!(opu_renderer_set_node_states(replay.0, std::ptr::null(), 0), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_node_states(replay.0, std::ptr::null(), 0),
+        OPU_OK
+    );
     assert_eq!(base, frame(&replay, &mut replay_canvas));
-    assert_eq!(opu_renderer_set_press(replay.0, PRESS_NODE, TICK, -1, -1, 1), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_press(replay.0, PRESS_NODE, TICK, -1, -1, 1),
+        OPU_OK
+    );
     assert_eq!(pressed, frame(&replay, &mut replay_canvas));
-    assert_eq!(opu_renderer_set_press(replay.0, PRESS_NODE, TICK.wrapping_add(100), -1, -1, 2), OPU_OK);
+    assert_eq!(
+        opu_renderer_set_press(replay.0, PRESS_NODE, TICK.wrapping_add(100), -1, -1, 2),
+        OPU_OK
+    );
     assert_eq!(confirmed, frame(&replay, &mut replay_canvas));
 
     let mut report = String::new();
-    writeln!(&mut report, "# Host ABI pixel-diff evidence (NOT device evidence)").unwrap();
+    writeln!(
+        &mut report,
+        "# Host ABI pixel-diff evidence (NOT device evidence)"
+    )
+    .unwrap();
     writeln!(&mut report, "platform: build-host software raster").unwrap();
-    writeln!(&mut report, "device: N/A (adb not installed; xcrun no available/attached iOS device)").unwrap();
+    writeln!(
+        &mut report,
+        "device: N/A (adb not installed; xcrun no available/attached iOS device)"
+    )
+    .unwrap();
     writeln!(&mut report, "ir: todo.opuir.json (shipped mobile asset)").unwrap();
     writeln!(&mut report, "viewport: {W}x{H} RGBA8").unwrap();
     writeln!(&mut report, "digest: FNV-1a 64-bit hex over RGBA bytes").unwrap();
     writeln!(&mut report, "").unwrap();
-    writeln!(&mut report, "| step | ABI event | frame digest | changed pixels vs baseline |").unwrap();
+    writeln!(
+        &mut report,
+        "| step | ABI event | frame digest | changed pixels vs baseline |"
+    )
+    .unwrap();
     writeln!(&mut report, "| --- | --- | --- | --- |").unwrap();
     writeln!(&mut report, "| 0 | initial | {base} | 0 |").unwrap();
-    writeln!(&mut report, "| 1 | set_node_states([{HOVER_NODE}, hover]) | {hovered} | {hover_diff} |").unwrap();
-    writeln!(&mut report, "| 2 | set_node_states([{FOCUS_NODE}, focus]) | {focused} | - |").unwrap();
+    writeln!(
+        &mut report,
+        "| 1 | set_node_states([{HOVER_NODE}, hover]) | {hovered} | {hover_diff} |"
+    )
+    .unwrap();
+    writeln!(
+        &mut report,
+        "| 2 | set_node_states([{FOCUS_NODE}, focus]) | {focused} | - |"
+    )
+    .unwrap();
     writeln!(&mut report, "| 3 | set_node_states(null, 0) | {base} | 0 |").unwrap();
-    writeln!(&mut report, "| 4 | set_press({PRESS_NODE}, {TICK}, down) | {pressed} | {press_diff} |").unwrap();
-    writeln!(&mut report, "| 5 | set_press({PRESS_NODE}, {}, confirm) | {confirmed} | - |", TICK.wrapping_add(100)).unwrap();
+    writeln!(
+        &mut report,
+        "| 4 | set_press({PRESS_NODE}, {TICK}, down) | {pressed} | {press_diff} |"
+    )
+    .unwrap();
+    writeln!(
+        &mut report,
+        "| 5 | set_press({PRESS_NODE}, {}, confirm) | {confirmed} | - |",
+        TICK.wrapping_add(100)
+    )
+    .unwrap();
     writeln!(&mut report, "| 6 | set_press(0, 0, clear) | {base} | 0 |").unwrap();
     writeln!(&mut report, "").unwrap();
-    writeln!(&mut report, "replay: all six digests reproduced byte-for-byte on a fresh OpuRenderer.").unwrap();
+    writeln!(
+        &mut report,
+        "replay: all six digests reproduced byte-for-byte on a fresh OpuRenderer."
+    )
+    .unwrap();
 
     let out_dir = std::env::var_os("OPUROM_ABI_EVIDENCE_DIR")
         .map(std::path::PathBuf::from)
@@ -1076,4 +1167,3 @@ fn host_event_sequence_writes_replayable_pixel_diff_evidence() {
     std::fs::write(&path, report).expect("write ABI pixel-diff evidence");
     assert!(path.exists());
 }
-

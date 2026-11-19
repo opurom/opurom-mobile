@@ -2179,23 +2179,47 @@ mod tests {
         assert_eq!(first.2, -1, "no stale deadline after drag");
     }
 
-
     #[test]
     fn node_state_abi_rejects_bad_tables_without_mutating() {
         let renderer = opu_renderer_new(32, 32);
         assert!(!renderer.is_null());
         let pairs = [7u32, OPU_NODE_STATE_HOVER];
-        assert_eq!(opu_renderer_set_node_states(renderer, pairs.as_ptr(), 2), OPU_OK);
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, pairs.as_ptr(), 2),
+            OPU_OK
+        );
         assert_eq!(unsafe { &*renderer }.node_states.len(), 1);
 
         let bad_state = [7u32, 99];
-        assert_eq!(opu_renderer_set_node_states(renderer, bad_state.as_ptr(), 2), OPU_ERR_NODE_STATE);
-        assert_eq!(unsafe { &*renderer }.node_states.len(), 1, "bad table is rejected atomically");
-        assert_eq!(opu_renderer_set_node_states(renderer, pairs.as_ptr(), 1), OPU_ERR_NODE_STATE);
-        assert_eq!(opu_renderer_set_node_states(renderer, std::ptr::null(), 2), OPU_ERR_NODE_STATE);
-        assert_eq!(opu_renderer_set_node_states(std::ptr::null_mut(), std::ptr::null(), 0), OPU_ERR_NULL);
-        assert_eq!(opu_renderer_set_node_states(renderer, std::ptr::null(), 0), OPU_OK);
-        assert!(unsafe { &*renderer }.node_states.is_empty(), "empty table clears all overrides");
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, bad_state.as_ptr(), 2),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            unsafe { &*renderer }.node_states.len(),
+            1,
+            "bad table is rejected atomically"
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, pairs.as_ptr(), 1),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, std::ptr::null(), 2),
+            OPU_ERR_NODE_STATE
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(std::ptr::null_mut(), std::ptr::null(), 0),
+            OPU_ERR_NULL
+        );
+        assert_eq!(
+            opu_renderer_set_node_states(renderer, std::ptr::null(), 0),
+            OPU_OK
+        );
+        assert!(
+            unsafe { &*renderer }.node_states.is_empty(),
+            "empty table clears all overrides"
+        );
         opu_renderer_free(renderer);
     }
 }
